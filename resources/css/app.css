@@ -209,17 +209,16 @@ td { color: #514337; }
 .cashier-category-button { flex: 0 0 auto; min-height: 32px; padding: 0 13px; border: 1px solid #eee8e2; border-radius: 8px; color: #72685f; background: #fff; font: inherit; font-size: 10px; font-weight: 650; cursor: pointer; }
 .cashier-category-button[aria-pressed="true"], .cashier-category-button:hover { border-color: #764c2d; color: #fff; background: #764c2d; }
 .cashier-products { min-height: 0; flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-content: start; gap: 10px; padding: 1px 3px 12px 1px; overflow-y: auto; scrollbar-color: #d7cabe transparent; scrollbar-width: thin; }
-.cashier-product-card { position: relative; min-width: 0; min-height: 174px; display: flex; flex-direction: column; padding: 8px; border: 1px solid #eee9e4; border-radius: 11px; background: #fff; box-shadow: 0 2px 6px #40291005; }
+.cashier-product-card { position: relative; min-width: 0; min-height: 154px; display: flex; flex-direction: column; padding: 14px; border: 1px solid #eee9e4; border-radius: 11px; background: #fff; box-shadow: 0 2px 6px #40291005; }
 .cashier-product-card[hidden] { display: none; }
-.cashier-product-art { height: 72px; display: grid; place-items: center; overflow: hidden; border-radius: 7px; color: #8a664c; background: linear-gradient(135deg, #f1e7db, #e7d5c3); }
-.cashier-product-art span { font-size: 28px; font-weight: 800; opacity: .8; }
-.cashier-product-details { min-width: 0; flex: 1; padding: 8px 3px 0; }
-.cashier-product-details h2 { overflow: hidden; margin: 0 0 3px; color: #39322c; font-size: 11px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
-.cashier-product-details p { overflow: hidden; margin: 0 0 7px; color: #9a9087; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.cashier-product-details strong { display: block; padding-right: 30px; color: #805333; font-size: 11px; line-height: 1.3; }
-.cashier-product-details .cashier-stock { display: block; margin-top: 5px; color: #789078; font-size: 9px; }
+.cashier-product-details { min-width: 0; flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 8px 3px 38px; }
+.cashier-product-details h2 { overflow: hidden; width: 100%; margin: 0; color: #39322c; font-size: 14px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.cashier-product-details p { overflow: hidden; margin: -6px 0 0; color: #9a9087; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.cashier-product-details .cashier-product-price { display: block; padding: 0; color: #805333; font-size: 13px; line-height: 1.3; }
+.cashier-product-details .cashier-stock { display: block; margin-top: -6px; color: #789078; font-size: 10px; }
 .cashier-add-button { position: absolute; right: 9px; bottom: 10px; width: 26px; height: 26px; border: 0; border-radius: 7px; color: #764c2d; background: #f4ece5; font: inherit; font-size: 19px; line-height: 1; cursor: pointer; }
 .cashier-add-button:hover { color: #fff; background: #764c2d; }
+.cashier-add-button:disabled { color: #a79d93; background: #ebe6e1; cursor: not-allowed; }
 .cashier-empty-catalog { grid-column: 1 / -1; padding: 35px 20px; border: 1px dashed #ded2c8; border-radius: 12px; color: #82766b; background: #fff; font-size: 13px; line-height: 1.6; text-align: center; }
 .cashier-cart { min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 16px; border: 1px solid #eee9e4; border-radius: 13px; background: #fff; }
 .cashier-cart-heading { display: flex; align-items: center; gap: 9px; padding-bottom: 13px; border-bottom: 1px solid #f0ece8; }
@@ -227,15 +226,13 @@ td { color: #514337; }
 .cashier-cart-heading > span { min-width: 20px; padding: 4px 6px; border-radius: 7px; color: #805333; background: #f4ece5; font-size: 9px; font-weight: 750; text-align: center; }
 .cashier-clear-button { margin-left: auto; padding: 3px 0; border: 0; color: #988e85; background: transparent; font: inherit; font-size: 10px; cursor: pointer; }
 .cashier-cart form { min-height: 0; flex: 1; display: flex; flex-direction: column; }
-.cashier-customer-label { margin: 15px 0 6px; color: #8a8077; font-size: 10px; }
 .cashier-cart-lines { min-height: 0; flex: 1; overflow-y: auto; }
 .cashier-cart-line { display: flex; flex-direction: column; gap: 9px; margin-top: 12px; padding: 11px; border: 1px solid #f0ece8; border-radius: 9px; background: #fdfcfb; }
 .cashier-line-heading, .cashier-line-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .cashier-line-heading strong { overflow: hidden; color: #453b33; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .cashier-line-heading button { padding: 0 3px; border: 0; color: #9a8f85; background: transparent; font-size: 17px; cursor: pointer; }
 .cashier-price-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #8a8077; font-size: 9px; }
-.cashier-price-label > span { display: flex; align-items: center; gap: 2px; color: #72675e; }
-.cashier-price-label input { width: 98px; height: 28px; padding: 0 6px; border: 1px solid #e8dfd7; border-radius: 6px; color: #453b33; background: #fff; font: inherit; font-size: 10px; }
+.cashier-price-label strong { color: #805333; font-size: 10px; font-weight: 700; }
 .cashier-quantity { display: flex; align-items: center; gap: 9px; }
 .cashier-quantity button { width: 23px; height: 23px; border: 1px solid #e8dfd7; border-radius: 6px; color: #764c2d; background: #fff; font: inherit; font-size: 14px; cursor: pointer; }
 .cashier-quantity input { width: 68px; height: 25px; padding: 0 4px; border: 1px solid #e8dfd7; border-radius: 6px; color: #51473e; font: inherit; font-size: 10px; text-align: center; }

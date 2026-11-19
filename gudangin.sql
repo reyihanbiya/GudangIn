@@ -146,7 +146,8 @@ CREATE TABLE `persediaan` (
   `id_pegawai` varchar(10) NOT NULL,
   `nama_barang` varchar(100) NOT NULL,
   `kategori_barang` varchar(50) DEFAULT NULL,
-  `stok` int(11) NOT NULL DEFAULT 0
+  `stok` int(11) NOT NULL DEFAULT 0,
+  `harga_jual` decimal(15,2) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------

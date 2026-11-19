@@ -29,20 +29,25 @@
                         data-stock="{{ $product->stok }}"
                         data-price="{{ $product->harga_jual ?? '' }}"
                     >
-                        <div class="cashier-product-art" aria-hidden="true"><span>{{ mb_strtoupper(mb_substr($product->nama_barang, 0, 1)) }}</span></div>
                         <div class="cashier-product-details">
                             <h2>{{ $product->nama_barang }}</h2>
-                            <p>{{ $product->id_persediaan }} · {{ $product->kategori_barang ?: 'Lainnya' }}</p>
-                            <strong>
+                            <p>Kode: {{ $product->id_persediaan }}</p>
+                            <strong class="cashier-product-price">
                                 @if ($product->harga_jual !== null)
                                     Rp{{ number_format((float) $product->harga_jual, 0, ',', '.') }} / {{ $product->satuan }}
                                 @else
-                                    Harga / {{ $product->satuan }} diisi di keranjang
+                                    Harga belum diatur
                                 @endif
                             </strong>
                             <span class="cashier-stock">Stok: {{ $product->stok_dengan_satuan }}</span>
                         </div>
-                        <button class="cashier-add-button" type="button" data-add-product aria-label="Tambah {{ $product->nama_barang }} ke keranjang">+</button>
+                        <button
+                            class="cashier-add-button"
+                            type="button"
+                            data-add-product
+                            aria-label="Tambah {{ $product->nama_barang }} ke keranjang"
+                            @disabled($product->harga_jual === null || (float) $product->harga_jual <= 0)
+                        >+</button>
                     </article>
                 @empty
                     <div class="cashier-empty-catalog">Belum ada barang yang memiliki stok. Tambahkan persediaan atau catat pembelian terlebih dahulu.</div>
@@ -56,18 +61,27 @@
                 <span id="cashier-cart-count">0</span>
                 <button class="cashier-clear-button" type="button" id="cashier-clear" aria-label="Kosongkan keranjang">Kosongkan</button>
             </div>
-            <form method="POST" action="{{ route('employee.penjualan.store') }}" id="cashier-checkout-form">
+            <form method="POST" action="{{ route('employee.penjualan.cashier.store') }}" id="cashier-checkout-form">
                 @csrf
                 <input type="hidden" name="tanggal" value="{{ today()->toDateString() }}">
-                <label class="cashier-customer-label" for="cashier-customer">Pelanggan</label>
-                <select id="cashier-customer" name="id_pelanggan" required>
-                    <option value="">Pilih pelanggan</option>
-                    @foreach ($customers as $customer)
-                        <option value="{{ $customer->id_pelanggan }}" @selected(old('id_pelanggan') === $customer->id_pelanggan)>
-                            {{ $customer->nama_pelanggan }}
-                        </option>
-                    @endforeach
-                </select>
+                <div class="cashier-new-customer-fields" id="cashier-new-customer-fields">
+                    <div class="cashier-new-customer-heading">
+                        <h3>Data pelanggan</h3>
+                        <p>Data akan langsung tersedia di menu Pengiriman.</p>
+                    </div>
+                    <label>
+                        <span>Nama pelanggan</span>
+                        <input type="text" name="pelanggan_baru[nama_pelanggan]" maxlength="100" value="{{ old('pelanggan_baru.nama_pelanggan') }}" autocomplete="name">
+                    </label>
+                    <label>
+                        <span>No. telepon</span>
+                        <input type="tel" name="pelanggan_baru[no_hp]" maxlength="20" value="{{ old('pelanggan_baru.no_hp') }}" autocomplete="tel">
+                    </label>
+                    <label>
+                        <span>Alamat pengiriman</span>
+                        <textarea name="pelanggan_baru[alamat]" maxlength="255" rows="2" autocomplete="street-address">{{ old('pelanggan_baru.alamat') }}</textarea>
+                    </label>
+                </div>
 
                 <div class="cashier-cart-lines" id="cashier-cart-lines" aria-live="polite"></div>
                 <p class="cashier-cart-empty" id="cashier-cart-empty">
@@ -97,12 +111,17 @@
             const cartContainer = document.getElementById('cashier-cart-lines');
             const cartEmpty = document.getElementById('cashier-cart-empty');
             const cartCount = document.getElementById('cashier-cart-count');
-            const customer = document.getElementById('cashier-customer');
+            const newCustomerFields = document.getElementById('cashier-new-customer-fields');
+            const newCustomerName = newCustomerFields.querySelector('[name="pelanggan_baru[nama_pelanggan]"]');
+            const newCustomerAddress = newCustomerFields.querySelector('[name="pelanggan_baru[alamat]"]');
             const checkout = document.getElementById('cashier-checkout');
             const checkoutHint = document.getElementById('cashier-checkout-hint');
             const money = (amount) => `Rp${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(amount || 0)}`;
             const cart = new Map();
             let activeCategory = 'Semua barang';
+
+            newCustomerName.required = true;
+            newCustomerAddress.required = true;
 
             function updateSummary() {
                 let total = 0;
@@ -113,7 +132,8 @@
                 document.getElementById('cashier-subtotal').textContent = money(total);
                 document.getElementById('cashier-total').textContent = money(total);
                 checkoutHint.textContent = `${cart.size} jenis barang dipilih`;
-                checkout.disabled = cart.size === 0 || !customer.value
+                const customerIsValid = Boolean(newCustomerName.value.trim() && newCustomerAddress.value.trim());
+                checkout.disabled = cart.size === 0 || !customerIsValid
                     || [...cart.values()].some((item) => !Number.isFinite(Number(item.price)) || Number(item.price) <= 0
                         || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0 || Number(item.quantity) > item.stock);
             }
@@ -155,9 +175,10 @@
                             <strong></strong>
                             <button type="button" data-remove-item aria-label="Hapus barang dari keranjang">×</button>
                         </div>
-                        <label class="cashier-price-label">Harga satuan
-                            <span><span>Rp</span><input type="number" min="0.01" step="0.01" inputmode="decimal" data-price></span>
-                        </label>
+                        <div class="cashier-price-label">
+                            <span>Harga satuan</span>
+                            <strong data-price></strong>
+                        </div>
                         <div class="cashier-line-bottom">
                             <div class="cashier-quantity">
                                 <button type="button" data-decrease aria-label="Kurangi jumlah">−</button>
@@ -169,7 +190,7 @@
                         </div>`;
                     row.dataset.id = id;
                     row.querySelector('.cashier-line-heading strong').textContent = item.name;
-                    row.querySelector('[data-price]').value = item.price;
+                    row.querySelector('[data-price]').textContent = money(item.price);
                     row.querySelector('[data-quantity]').value = item.quantity;
                     row.querySelector('.cashier-unit').textContent = item.unit;
                     row.querySelector('[data-line-total]').textContent = money(lineTotal);
@@ -201,14 +222,10 @@
             });
 
             cartContainer.addEventListener('input', (event) => {
-                if (!event.target.matches('[data-price], [data-quantity]')) return;
+                if (!event.target.matches('[data-quantity]')) return;
                 const row = event.target.closest('.cashier-cart-line');
                 const item = cart.get(row.dataset.id);
-                if (event.target.matches('[data-price]')) {
-                    item.price = event.target.value;
-                } else {
-                    item.quantity = event.target.value === '' ? '' : Number(event.target.value);
-                }
+                item.quantity = event.target.value === '' ? '' : Number(event.target.value);
                 row.querySelector('[data-line-total]').textContent = money((Number(item.price) || 0) * (Number(item.quantity) || 0));
                 updateSummary();
             });
@@ -237,7 +254,7 @@
                 renderCart();
             });
             search.addEventListener('input', filterProducts);
-            customer.addEventListener('change', renderCart);
+            newCustomerFields.addEventListener('input', updateSummary);
             document.addEventListener('keydown', (event) => {
                 if (event.key === '/' && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
                     event.preventDefault();
