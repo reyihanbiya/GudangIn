@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\QuantityFormatter;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -19,6 +20,7 @@ class Persediaan extends Model
         'id_pegawai',
         'nama_barang',
         'kategori_barang',
+        'satuan',
         'stok',
     ];
 
@@ -35,6 +37,11 @@ class Persediaan extends Model
     public function detailPembelian(): HasMany
     {
         return $this->hasMany(DetailPembelian::class, 'id_persediaan', 'id_persediaan');
+    }
+
+    public function getStokDenganSatuanAttribute(): string
+    {
+        return QuantityFormatter::format($this->stok).' '.$this->satuan;
     }
 
     /**

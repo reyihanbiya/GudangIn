@@ -53,8 +53,9 @@ a { color: inherit; }
 .form-intro h1 { font-size: clamp(36px, 4vw, 50px); }
 .stack-form { display: flex; flex-direction: column; gap: 10px; margin-top: 23px; }
 .stack-form > label { margin-top: 6px; color: #514337; font-size: 13px; font-weight: 700; }
-.stack-form input:not([type=checkbox]) { width: 100%; height: 44px; padding: 0 12px; border: 1px solid #ded2c8; border-radius: 8px; background: #fff; color: #302820; font: inherit; outline: none; }
-.stack-form input:focus { border-color: #a67551; box-shadow: 0 0 0 3px #a675511f; }
+.field-help { margin: -5px 0 2px; color: #82766b; font-size: 12px; line-height: 1.5; }
+.stack-form input:not([type=checkbox]), .stack-form select { width: 100%; height: 44px; padding: 0 12px; border: 1px solid #ded2c8; border-radius: 8px; background: #fff; color: #302820; font: inherit; outline: none; }
+.stack-form input:focus, .stack-form select:focus { border-color: #a67551; box-shadow: 0 0 0 3px #a675511f; }
 .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; color: #66574b; font-size: 13px; }
 .notice { padding: 11px 13px; border-radius: 8px; font-size: 13px; line-height: 1.5; }
 .notice-success { color: #286344; background: #e8f4ec; }
@@ -66,6 +67,13 @@ a { color: inherit; }
 .setup-panel legend { margin-bottom: 12px; color: #764c2d; font-size: 14px; font-weight: 800; }
 .setup-panel .stack-form { margin-top: 20px; }
 .setup-panel .stack-form > label { margin-top: 2px; }
+.setup-account-group { display: grid; gap: 12px; margin: 18px 0; }
+.setup-account-group h3 { margin: 0; color: #764c2d; font-size: 15px; }
+.setup-account-list { display: grid; gap: 12px; }
+.setup-panel .setup-account-card { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 14px; border: 1px solid #eee4dc; border-radius: 10px; }
+.setup-panel .setup-account-card legend { margin-bottom: 4px; }
+.setup-panel .setup-account-card > label { color: #514337; font-size: 12px; font-weight: 700; }
+.setup-remove-account { align-self: flex-start; margin-top: 3px; }
 .message-panel { max-width: 760px; margin: auto; padding: 42px; border: 1px solid #eee4dc; border-radius: 18px; background: #fff; }
 .message-panel h1 { font-size: 38px; }
 .message-panel > p:not(.eyebrow) { color: #66574b; line-height: 1.7; }
@@ -102,6 +110,10 @@ td { color: #514337; }
 .pagination-wrap p { margin: 0; color: #82766b; font-size: 12px; }
 .pagination-wrap a, .pagination-wrap span[aria-current] { padding: 5px 10px; border: 1px solid #e8ddd3; border-radius: 6px; color: #764c2d; font-size: 12px; text-decoration: none; }
 .master-form-panel { max-width: 720px; margin-bottom: 40px; }
+.master-form-panel > h2 { margin: 0; font-size: 18px; }
+.account-list-panel { margin-bottom: 40px; }
+.account-list-section + .account-list-section { border-top: 1px solid #eee4dc; }
+.account-list-section h2 { margin: 0; padding: 18px 17px; font-size: 16px; }
 .stack-form textarea { width: 100%; min-height: 100px; padding: 12px; border: 1px solid #ded2c8; border-radius: 8px; color: #302820; background: white; font: inherit; outline: none; resize: vertical; }
 .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
@@ -226,7 +238,8 @@ td { color: #514337; }
 .cashier-price-label input { width: 98px; height: 28px; padding: 0 6px; border: 1px solid #e8dfd7; border-radius: 6px; color: #453b33; background: #fff; font: inherit; font-size: 10px; }
 .cashier-quantity { display: flex; align-items: center; gap: 9px; }
 .cashier-quantity button { width: 23px; height: 23px; border: 1px solid #e8dfd7; border-radius: 6px; color: #764c2d; background: #fff; font: inherit; font-size: 14px; cursor: pointer; }
-.cashier-quantity span { min-width: 11px; color: #51473e; font-size: 10px; text-align: center; }
+.cashier-quantity input { width: 68px; height: 25px; padding: 0 4px; border: 1px solid #e8dfd7; border-radius: 6px; color: #51473e; font: inherit; font-size: 10px; text-align: center; }
+.cashier-quantity .cashier-unit { color: #82766b; font-size: 9px; }
 .cashier-line-bottom > strong { color: #805333; font-size: 10px; }
 .cashier-cart-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 8px; margin: 0; color: #948a81; text-align: center; }
 .cashier-cart-empty[hidden] { display: none; }

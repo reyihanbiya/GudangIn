@@ -85,16 +85,16 @@
                                     <option
                                         value="{{ $product->id_persediaan }}"
                                         @selected(($oldItem['id_persediaan'] ?? '') === $product->id_persediaan)
-                                        @disabled($type === 'Penjualan' && $product->stok < 1)
+                                        @disabled($type === 'Penjualan' && $product->stok <= 0)
                                     >
-                                        {{ $product->nama_barang }} (stok: {{ $product->stok }})
+                                        {{ $product->nama_barang }} (stok: {{ \App\Support\QuantityFormatter::format($product->stok) }} {{ $product->satuan }})
                                     </option>
                                 @endforeach
                             </select>
                         </div>
                         <div>
-                            <label for="item-{{ $index }}-quantity">Jumlah</label>
-                            <input id="item-{{ $index }}-quantity" name="items[{{ $index }}][jumlah_barang]" type="number" min="1" value="{{ $oldItem['jumlah_barang'] ?? '' }}">
+                            <label for="item-{{ $index }}-quantity">Jumlah barang (gunakan satuan barang)</label>
+                            <input id="item-{{ $index }}-quantity" name="items[{{ $index }}][jumlah_barang]" type="number" min="0.001" step="0.001" value="{{ $oldItem['jumlah_barang'] ?? '' }}">
                         </div>
                         <div>
                             <label for="item-{{ $index }}-price">{{ $priceLabel }}</label>
@@ -113,14 +113,14 @@
                             <option value="">Pilih barang</option>
                             @foreach ($products as $product)
                                 @if ($type !== 'Penjualan' || $product->stok > 0)
-                                    <option value="{{ $product->id_persediaan }}">{{ $product->nama_barang }} (stok: {{ $product->stok }})</option>
+                                    <option value="{{ $product->id_persediaan }}">{{ $product->nama_barang }} (stok: {{ \App\Support\QuantityFormatter::format($product->stok) }} {{ $product->satuan }})</option>
                                 @endif
                             @endforeach
                         </select>
                     </div>
                     <div>
-                        <label for="item-__INDEX__-quantity">Jumlah</label>
-                        <input id="item-__INDEX__-quantity" name="items[__INDEX__][jumlah_barang]" type="number" min="1">
+                        <label for="item-__INDEX__-quantity">Jumlah barang (gunakan satuan barang)</label>
+                        <input id="item-__INDEX__-quantity" name="items[__INDEX__][jumlah_barang]" type="number" min="0.001" step="0.001">
                     </div>
                     <div>
                         <label for="item-__INDEX__-price">{{ $priceLabel }}</label>

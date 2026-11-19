@@ -29,12 +29,14 @@ class SetupController extends Controller
         $this->ensureDatabaseReady();
 
         $data = $request->validate([
-            'owner_name' => ['required', 'string', 'max:100'],
-            'owner_username' => ['required', 'string', 'max:50', 'unique:owner,username'],
-            'owner_password' => ['required', 'string', 'min:8', 'confirmed'],
-            'employee_name' => ['required', 'string', 'max:100'],
-            'employee_username' => ['required', 'string', 'max:50', 'unique:pegawai,username'],
-            'employee_password' => ['required', 'string', 'min:8', 'confirmed'],
+            'owners' => ['required', 'array', 'min:1'],
+            'owners.*.name' => ['required', 'string', 'max:100'],
+            'owners.*.username' => ['required', 'string', 'max:50', 'distinct:ignore_case', 'unique:owner,username'],
+            'owners.*.password' => ['required', 'string', 'min:8', 'confirmed'],
+            'employees' => ['required', 'array', 'min:1'],
+            'employees.*.name' => ['required', 'string', 'max:100'],
+            'employees.*.username' => ['required', 'string', 'max:50', 'distinct:ignore_case', 'unique:pegawai,username'],
+            'employees.*.password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
         DB::transaction(function () use ($data): void {
@@ -53,19 +55,23 @@ class SetupController extends Controller
                 abort(409, 'Penyiapan awal sudah dilakukan.');
             }
 
-            Owner::query()->create([
-                'nama_owner' => $data['owner_name'],
-                'username' => $data['owner_username'],
-                'password' => $data['owner_password'],
-            ]);
+            foreach ($data['owners'] as $owner) {
+                Owner::query()->create([
+                    'nama_owner' => $owner['name'],
+                    'username' => $owner['username'],
+                    'password' => $owner['password'],
+                ]);
+            }
 
-            Pegawai::query()->create([
-                'id_pegawai' => CodeGeneratorService::generate('pegawai'),
-                'nama_pegawai' => $data['employee_name'],
-                'username' => $data['employee_username'],
-                'password' => $data['employee_password'],
-                'jabatan' => 'Pegawai',
-            ]);
+            foreach ($data['employees'] as $employee) {
+                Pegawai::query()->create([
+                    'id_pegawai' => CodeGeneratorService::generate('pegawai'),
+                    'nama_pegawai' => $employee['name'],
+                    'username' => $employee['username'],
+                    'password' => $employee['password'],
+                    'jabatan' => 'Pegawai',
+                ]);
+            }
         });
 
         return redirect()

@@ -6,11 +6,39 @@ use App\Models\Persediaan;
 use App\Services\CodeGeneratorService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class PersediaanController extends Controller
 {
+    private const INVENTORY_UNITS = [
+        'pcs' => 'Pcs',
+        'unit' => 'Unit',
+        'kg' => 'Kilogram (kg)',
+        'gram' => 'Gram (g)',
+        'ton' => 'Ton',
+        'meter' => 'Meter (m)',
+        'cm' => 'Sentimeter (cm)',
+        'mm' => 'Milimeter (mm)',
+        'm2' => 'Meter persegi (m²)',
+        'm3' => 'Meter kubik (m³)',
+        'liter' => 'Liter (L)',
+        'ml' => 'Mililiter (ml)',
+        'batang' => 'Batang',
+        'sak' => 'Sak',
+        'karung' => 'Karung',
+        'dus' => 'Dus',
+        'box' => 'Box',
+        'roll' => 'Roll',
+        'lembar' => 'Lembar',
+        'set' => 'Set',
+        'pak' => 'Pak',
+        'galon' => 'Galon',
+    ];
+
+    private const CUSTOM_UNIT = '__custom__';
+
     public function index(Request $request): View
     {
         $search = $request->validate([
@@ -21,7 +49,8 @@ class PersediaanController extends Controller
             ->when($search, function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
                     $query->where('nama_barang', 'like', "%{$search}%")
-                        ->orWhere('kategori_barang', 'like', "%{$search}%");
+                        ->orWhere('kategori_barang', 'like', "%{$search}%")
+                        ->orWhere('satuan', 'like', "%{$search}%");
                 });
             })
             ->orderBy('nama_barang')
@@ -30,7 +59,7 @@ class PersediaanController extends Controller
 
         return view('masters.index', [
             'title' => 'Persediaan',
-            'description' => 'Kelola barang dan pantau jumlah stok yang tersedia.',
+            'description' => 'Kelola barang, satuan ukur, dan jumlah stok yang tersedia.',
             'createRoute' => 'employee.persediaan.create',
             'editRoute' => 'employee.persediaan.edit',
             'deleteRoute' => 'employee.persediaan.destroy',
@@ -39,7 +68,7 @@ class PersediaanController extends Controller
                 ['label' => 'ID', 'field' => 'id_persediaan'],
                 ['label' => 'Nama barang', 'field' => 'nama_barang'],
                 ['label' => 'Kategori', 'field' => 'kategori_barang'],
-                ['label' => 'Stok', 'field' => 'stok'],
+                ['label' => 'Stok', 'field' => 'stok_dengan_satuan'],
             ],
             'rows' => $inventory,
             'stockCardRoute' => 'employee.persediaan.stock-card',
@@ -69,14 +98,29 @@ class PersediaanController extends Controller
 
     public function update(Request $request, Persediaan $persediaan): RedirectResponse
     {
-        $persediaan->update($this->validateInventory($request));
+        $data = $this->validateInventory($request);
+
+        $hasTransactions = $persediaan->detailPenjualan()->exists() || $persediaan->detailPembelian()->exists();
+        $hasFractionalHistory = $persediaan->detailPenjualan()->whereRaw('jumlah_barang <> ROUND(jumlah_barang, 0)')->exists()
+            || $persediaan->detailPembelian()->whereRaw('jumlah_barang <> ROUND(jumlah_barang, 0)')->exists();
+        $isLegacyUnit = $persediaan->satuan === 'unit'
+            && floor((float) $persediaan->stok) === (float) $persediaan->stok
+            && ! $hasFractionalHistory;
+
+        if ($data['satuan'] !== $persediaan->satuan && $hasTransactions && ! $isLegacyUnit) {
+            return back()
+                ->withInput()
+                ->withErrors(['satuan' => 'Satuan tidak dapat diubah karena barang sudah memiliki riwayat transaksi. Buat data barang baru jika satuannya berbeda.']);
+        }
+
+        $persediaan->update($data);
 
         return redirect()->route('employee.persediaan.index')->with('status', 'Data barang berhasil diperbarui.');
     }
 
     public function destroy(Persediaan $persediaan): RedirectResponse
     {
-        if ((int) $persediaan->stok > 0) {
+        if ((float) $persediaan->stok > 0) {
             return back()->withErrors(['delete' => 'Stok barang harus nol sebelum barang dapat dihapus.']);
         }
 
@@ -96,14 +140,14 @@ class PersediaanController extends Controller
             ->where('detail.id_persediaan', $persediaan->id_persediaan)
             ->where('purchase.status_pengiriman', 'Diterima')
             ->selectRaw(
-                "purchase.tanggal as tanggal, 'Pembelian' as keterangan, purchase.id_pembelian as id_transaksi, detail.jumlah_barang as masuk, 0 as keluar"
+                "purchase.tanggal as tanggal, 'Pembelian' as keterangan, purchase.id_pembelian as id_transaksi, detail.jumlah_barang as masuk, 0 as keluar, detail.satuan as satuan"
             );
 
         $sales = DB::table('detail_penjualan as detail')
             ->join('penjualan as sale', 'sale.id_penjualan', '=', 'detail.id_penjualan')
             ->where('detail.id_persediaan', $persediaan->id_persediaan)
             ->selectRaw(
-                "sale.tanggal as tanggal, 'Penjualan' as keterangan, sale.id_penjualan as id_transaksi, 0 as masuk, detail.jumlah_barang as keluar"
+                "sale.tanggal as tanggal, 'Penjualan' as keterangan, sale.id_penjualan as id_transaksi, 0 as masuk, detail.jumlah_barang as keluar, detail.satuan as satuan"
             );
 
         $movements = $purchases->unionAll($sales)
@@ -121,9 +165,18 @@ class PersediaanController extends Controller
             'fields' => [
                 ['name' => 'nama_barang', 'label' => 'Nama barang', 'type' => 'text', 'required' => true, 'maxlength' => 100],
                 ['name' => 'kategori_barang', 'label' => 'Kategori', 'type' => 'text', 'required' => false, 'maxlength' => 50],
-                ['name' => 'stok', 'label' => 'Stok', 'type' => 'number', 'required' => true, 'min' => 0],
+                [
+                    'name' => 'satuan',
+                    'label' => 'Satuan stok',
+                    'type' => 'select',
+                    'required' => true,
+                    'options' => self::INVENTORY_UNITS,
+                    'customOption' => true,
+                    'help' => 'Stok, pembelian, dan penjualan barang ini akan selalu memakai satuan ini.',
+                ],
+                ['name' => 'stok', 'label' => 'Stok awal', 'type' => 'number', 'required' => true, 'min' => 0, 'step' => '0.001'],
             ],
-            'values' => $persediaan?->only(['nama_barang', 'kategori_barang', 'stok']) ?? ['stok' => 0],
+            'values' => $persediaan?->only(['nama_barang', 'kategori_barang', 'satuan', 'stok']) ?? ['satuan' => 'pcs', 'stok' => 0],
             'formAction' => $persediaan
                 ? route('employee.persediaan.update', $persediaan)
                 : route('employee.persediaan.store'),
@@ -135,10 +188,20 @@ class PersediaanController extends Controller
 
     private function validateInventory(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'nama_barang' => ['required', 'string', 'max:100'],
             'kategori_barang' => ['nullable', 'string', 'max:50'],
-            'stok' => ['required', 'integer', 'min:0', 'max:2147483647'],
+            'satuan' => ['required', 'string', Rule::in([...array_keys(self::INVENTORY_UNITS), self::CUSTOM_UNIT])],
+            'satuan_custom' => ['nullable', 'required_if:satuan,'.self::CUSTOM_UNIT, 'string', 'max:20'],
+            'stok' => ['required', 'numeric', 'decimal:0,3', 'min:0', 'max:999999999999.999'],
         ]);
+
+        if ($data['satuan'] === self::CUSTOM_UNIT) {
+            $data['satuan'] = $data['satuan_custom'];
+        }
+
+        unset($data['satuan_custom']);
+
+        return $data;
     }
 }

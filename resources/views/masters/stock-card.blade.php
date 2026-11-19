@@ -7,7 +7,7 @@
         <div>
             <p class="eyebrow">Persediaan / Kartu stok</p>
             <h1>{{ $persediaan->nama_barang }}</h1>
-            <p class="lead">Stok saat ini: <strong>{{ $persediaan->stok }}</strong> {{ $persediaan->kategori_barang ? '· '.$persediaan->kategori_barang : '' }}</p>
+            <p class="lead">Stok saat ini: <strong>{{ $persediaan->stok_dengan_satuan }}</strong> {{ $persediaan->kategori_barang ? '· '.$persediaan->kategori_barang : '' }}</p>
         </div>
         <a class="button button-secondary" href="{{ route('employee.persediaan.index') }}">Kembali ke persediaan</a>
     </section>
@@ -29,8 +29,8 @@
                             <td>{{ \Illuminate\Support\Carbon::parse($movement->tanggal)->format('d/m/Y') }}</td>
                             <td>{{ $movement->keterangan }}</td>
                             <td>{{ $movement->id_transaksi }}</td>
-                            <td>{{ $movement->masuk }}</td>
-                            <td>{{ $movement->keluar }}</td>
+                            <td>{{ \App\Support\QuantityFormatter::format($movement->masuk) }} {{ $movement->satuan }}</td>
+                            <td>{{ \App\Support\QuantityFormatter::format($movement->keluar) }} {{ $movement->satuan }}</td>
                         </tr>
                     @empty
                         <tr><td class="empty-cell" colspan="5">Belum ada pergerakan stok untuk barang ini.</td></tr>

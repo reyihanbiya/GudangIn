@@ -25,6 +25,7 @@
                         data-id="{{ $product->id_persediaan }}"
                         data-name="{{ $product->nama_barang }}"
                         data-category="{{ $product->kategori_barang ?: 'Lainnya' }}"
+                        data-unit="{{ $product->satuan }}"
                         data-stock="{{ $product->stok }}"
                         data-price="{{ $product->harga_jual ?? '' }}"
                     >
@@ -34,12 +35,12 @@
                             <p>{{ $product->id_persediaan }} · {{ $product->kategori_barang ?: 'Lainnya' }}</p>
                             <strong>
                                 @if ($product->harga_jual !== null)
-                                    Rp{{ number_format((float) $product->harga_jual, 0, ',', '.') }}
+                                    Rp{{ number_format((float) $product->harga_jual, 0, ',', '.') }} / {{ $product->satuan }}
                                 @else
-                                    Harga diisi di keranjang
+                                    Harga / {{ $product->satuan }} diisi di keranjang
                                 @endif
                             </strong>
-                            <span class="cashier-stock">Stok: {{ number_format((int) $product->stok, 0, ',', '.') }}</span>
+                            <span class="cashier-stock">Stok: {{ $product->stok_dengan_satuan }}</span>
                         </div>
                         <button class="cashier-add-button" type="button" data-add-product aria-label="Tambah {{ $product->nama_barang }} ke keranjang">+</button>
                     </article>
@@ -105,16 +106,16 @@
 
             function updateSummary() {
                 let total = 0;
-                let quantityTotal = 0;
                 cart.forEach((item) => {
-                    total += (Number(item.price) || 0) * item.quantity;
-                    quantityTotal += item.quantity;
+                    total += (Number(item.price) || 0) * (Number(item.quantity) || 0);
                 });
-                cartCount.textContent = quantityTotal;
+                cartCount.textContent = cart.size;
                 document.getElementById('cashier-subtotal').textContent = money(total);
                 document.getElementById('cashier-total').textContent = money(total);
-                checkoutHint.textContent = `${quantityTotal} barang dipilih`;
-                checkout.disabled = cart.size === 0 || !customer.value || [...cart.values()].some((item) => !Number.isFinite(Number(item.price)) || Number(item.price) <= 0);
+                checkoutHint.textContent = `${cart.size} jenis barang dipilih`;
+                checkout.disabled = cart.size === 0 || !customer.value
+                    || [...cart.values()].some((item) => !Number.isFinite(Number(item.price)) || Number(item.price) <= 0
+                        || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0 || Number(item.quantity) > item.stock);
             }
 
             const categoryNames = [...new Set(productCards.map((card) => card.dataset.category))].sort((a, b) => a.localeCompare(b, 'id'));
@@ -145,7 +146,7 @@
                 cartContainer.replaceChildren();
 
                 cart.forEach((item, id) => {
-                    const lineTotal = (Number(item.price) || 0) * item.quantity;
+                    const lineTotal = (Number(item.price) || 0) * (Number(item.quantity) || 0);
 
                     const row = document.createElement('div');
                     row.className = 'cashier-cart-line';
@@ -160,7 +161,8 @@
                         <div class="cashier-line-bottom">
                             <div class="cashier-quantity">
                                 <button type="button" data-decrease aria-label="Kurangi jumlah">−</button>
-                                <span></span>
+                                <input type="number" min="0.001" step="0.001" inputmode="decimal" data-quantity aria-label="Jumlah barang">
+                                <span class="cashier-unit"></span>
                                 <button type="button" data-increase aria-label="Tambah jumlah">+</button>
                             </div>
                             <strong data-line-total></strong>
@@ -168,7 +170,8 @@
                     row.dataset.id = id;
                     row.querySelector('.cashier-line-heading strong').textContent = item.name;
                     row.querySelector('[data-price]').value = item.price;
-                    row.querySelector('.cashier-quantity span').textContent = item.quantity;
+                    row.querySelector('[data-quantity]').value = item.quantity;
+                    row.querySelector('.cashier-unit').textContent = item.unit;
                     row.querySelector('[data-line-total]').textContent = money(lineTotal);
                     cartContainer.appendChild(row);
                 });
@@ -187,8 +190,9 @@
                     } else {
                         cart.set(id, {
                             name: card.dataset.name,
+                            unit: card.dataset.unit,
                             price: card.dataset.price,
-                            quantity: 1,
+                            quantity: Math.min(1, Number(card.dataset.stock)),
                             stock: Number(card.dataset.stock),
                         });
                     }
@@ -197,11 +201,15 @@
             });
 
             cartContainer.addEventListener('input', (event) => {
-                if (!event.target.matches('[data-price]')) return;
+                if (!event.target.matches('[data-price], [data-quantity]')) return;
                 const row = event.target.closest('.cashier-cart-line');
                 const item = cart.get(row.dataset.id);
-                item.price = event.target.value;
-                row.querySelector('[data-line-total]').textContent = money((Number(item.price) || 0) * item.quantity);
+                if (event.target.matches('[data-price]')) {
+                    item.price = event.target.value;
+                } else {
+                    item.quantity = event.target.value === '' ? '' : Number(event.target.value);
+                }
+                row.querySelector('[data-line-total]').textContent = money((Number(item.price) || 0) * (Number(item.quantity) || 0));
                 updateSummary();
             });
 
@@ -212,10 +220,12 @@
                 if (event.target.closest('[data-remove-item]')) {
                     cart.delete(row.dataset.id);
                 } else if (event.target.closest('[data-decrease]')) {
-                    item.quantity -= 1;
-                    if (item.quantity < 1) cart.delete(row.dataset.id);
+                    item.quantity = Math.round((Number(item.quantity) - 1) * 1000) / 1000;
+                    if (item.quantity <= 0) cart.delete(row.dataset.id);
                 } else if (event.target.closest('[data-increase]')) {
-                    if (item.quantity < item.stock) item.quantity += 1;
+                    if (Number(item.quantity) < item.stock) {
+                        item.quantity = Math.min(item.stock, Math.round((Number(item.quantity) + 1) * 1000) / 1000);
+                    }
                 } else {
                     return;
                 }
@@ -258,9 +268,10 @@
                 oldItems.forEach((item) => {
                     const card = productCards.find((product) => product.dataset.id === item.id_persediaan);
                     const quantity = Number(item.jumlah_barang);
-                    if (!card || !Number.isInteger(quantity) || quantity < 1) return;
+                    if (!card || !Number.isFinite(quantity) || quantity <= 0) return;
                     cart.set(card.dataset.id, {
                         name: card.dataset.name,
+                        unit: card.dataset.unit,
                         price: item.harga_satuan || '',
                         quantity: Math.min(quantity, Number(card.dataset.stock)),
                         stock: Number(card.dataset.stock),
