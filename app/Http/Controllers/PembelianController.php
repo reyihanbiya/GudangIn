@@ -20,7 +20,7 @@ use Illuminate\View\View;
 
 class PembelianController extends Controller
 {
-    private const MAX_STOCK = 2147483647;
+    private const MAX_STOCK = 999999999999.999;
 
     public function index(): View
     {
@@ -137,9 +137,9 @@ class PembelianController extends Controller
                         ->lockForUpdate()
                         ->firstOrFail();
 
-                    if ((int) $inventory->stok > self::MAX_STOCK - (int) $detail->jumlah_barang) {
+                    if ((float) $inventory->stok > self::MAX_STOCK - (float) $detail->jumlah_barang) {
                         throw ValidationException::withMessages([
-                            'status_pengiriman' => "Penambahan stok {$inventory->nama_barang} melebihi kapasitas penyimpanan.",
+                            'status_pengiriman' => "Penambahan stok {$inventory->nama_barang} melebihi kapasitas penyimpanan ({$inventory->satuan}).",
                         ]);
                     }
 
@@ -163,7 +163,7 @@ class PembelianController extends Controller
             'status_pengiriman' => ['required', 'in:Diproses,Diterima'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.id_persediaan' => ['nullable', 'string', 'exists:persediaan,id_persediaan'],
-            'items.*.jumlah_barang' => ['nullable', 'integer', 'min:1', 'max:2147483647'],
+            'items.*.jumlah_barang' => ['nullable', 'numeric', 'decimal:0,3', 'min:0.001', 'max:999999999999.999'],
             'items.*.harga_beli' => ['nullable', 'numeric', 'min:0.01', 'max:9999999999999.99'],
         ]);
 
@@ -200,7 +200,7 @@ class PembelianController extends Controller
                         $validator->errors()->add("items.{$index}.{$field}", $message);
                     }
                 } else {
-                    if ((float) $item['harga_beli'] * (int) $item['jumlah_barang'] > 9999999999999.99) {
+                    if ((float) $item['harga_beli'] * (float) $item['jumlah_barang'] > 9999999999999.99) {
                         $validator->errors()->add(
                             "items.{$index}.harga_beli",
                             'Subtotal barang melebihi batas maksimum yang dapat disimpan.'
@@ -248,16 +248,17 @@ class PembelianController extends Controller
 
                 if (
                     $data['status_pengiriman'] === 'Diterima'
-                    && (int) $inventory->stok > self::MAX_STOCK - (int) $item['jumlah_barang']
+                    && (float) $inventory->stok > self::MAX_STOCK - (float) $item['jumlah_barang']
                 ) {
                     throw ValidationException::withMessages([
-                        'items' => "Penambahan stok {$inventory->nama_barang} melebihi kapasitas penyimpanan.",
+                        'items' => "Penambahan stok {$inventory->nama_barang} melebihi kapasitas penyimpanan ({$inventory->satuan}).",
                     ]);
                 }
 
                 DetailPembelian::query()->create([
                     'id_pembelian' => $transaction->id_pembelian,
                     'id_persediaan' => $inventory->id_persediaan,
+                    'satuan' => $inventory->satuan,
                     'harga_beli' => $item['harga_beli'],
                     'jumlah_barang' => $item['jumlah_barang'],
                 ]);

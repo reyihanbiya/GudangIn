@@ -29,7 +29,7 @@ class PenjualanController extends Controller
 
         $products = Persediaan::query()
             ->where('stok', '>', 0)
-            ->select(['id_persediaan', 'nama_barang', 'kategori_barang', 'stok'])
+            ->select(['id_persediaan', 'nama_barang', 'kategori_barang', 'satuan', 'stok'])
             ->selectSub($lastSalePrice, 'harga_jual')
             ->orderBy('nama_barang')
             ->get();
@@ -87,13 +87,14 @@ class PenjualanController extends Controller
 
                 if ($inventory->stok < $item['jumlah_barang']) {
                     throw ValidationException::withMessages([
-                        'items' => "Stok {$inventory->nama_barang} tidak mencukupi. Tersedia {$inventory->stok}.",
+                        'items' => "Stok {$inventory->nama_barang} tidak mencukupi. Tersedia {$inventory->stok_dengan_satuan}.",
                     ]);
                 }
 
                 DetailPenjualan::query()->create([
                     'id_penjualan' => $transaction->id_penjualan,
                     'id_persediaan' => $inventory->id_persediaan,
+                    'satuan' => $inventory->satuan,
                     'harga_satuan' => $item['harga_satuan'],
                     'jumlah_barang' => $item['jumlah_barang'],
                 ]);
@@ -135,7 +136,7 @@ class PenjualanController extends Controller
             'tanggal' => ['required', 'date'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.id_persediaan' => ['nullable', 'string', 'exists:persediaan,id_persediaan'],
-            'items.*.jumlah_barang' => ['nullable', 'integer', 'min:1', 'max:2147483647'],
+            'items.*.jumlah_barang' => ['nullable', 'numeric', 'decimal:0,3', 'min:0.001', 'max:999999999999.999'],
             "items.*.{$priceField}" => ['nullable', 'numeric', 'min:0.01', 'max:9999999999999.99'],
         ]);
 
@@ -185,7 +186,7 @@ class PenjualanController extends Controller
                         $validator->errors()->add("items.{$index}.{$field}", $message);
                     }
                 } else {
-                    if ((float) $item[$priceField] * (int) $item['jumlah_barang'] > 9999999999999.99) {
+                    if ((float) $item[$priceField] * (float) $item['jumlah_barang'] > 9999999999999.99) {
                         $validator->errors()->add(
                             "items.{$index}.{$priceField}",
                             'Subtotal barang melebihi batas maksimum yang dapat disimpan.'

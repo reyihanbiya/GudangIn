@@ -20,6 +20,8 @@ GudangIn adalah aplikasi web POS dan persediaan untuk toko bangunan, dibuat deng
    php artisan migrate
    ```
 
+   Barang lama mendapat satuan sementara `unit`; sesuaikan satuannya melalui menu **Persediaan** sebelum melanjutkan input transaksi.
+
 6. Jalankan aplikasi dan aset frontend:
 
    ```powershell
@@ -27,15 +29,16 @@ GudangIn adalah aplikasi web POS dan persediaan untuk toko bangunan, dibuat deng
    ```
 
    Script ini menjalankan Laravel, worker antrean, dan Vite. Pail tidak dijalankan karena membutuhkan ekstensi `pcntl` yang tidak tersedia pada Windows.
-7. Buka [http://127.0.0.1:8000](http://127.0.0.1:8000). Pada penggunaan pertama, halaman akan meminta pembuatan akun Owner dan Pegawai.
+7. Buka [http://127.0.0.1:8000](http://127.0.0.1:8000). Pada penggunaan pertama, halaman akan meminta pembuatan satu atau lebih akun Owner dan Pegawai.
 
 Biarkan terminal tetap terbuka selama aplikasi digunakan. Halaman penyiapan hanya tersedia sebelum akun pertama dibuat.
 
 ## Fitur yang tersedia
 
-- Login terpisah untuk Pegawai dan Owner, termasuk pembuatan akun awal satu kali.
+- Login terpisah untuk Pegawai dan Owner; penyiapan awal dapat membuat beberapa akun untuk kedua peran sekaligus.
 - Dashboard ringkasan untuk kedua peran.
 - Pengelolaan pelanggan, supplier, dan persediaan.
+- Satuan stok per barang (mis. sak, kg, meter, atau liter) dengan jumlah hingga tiga angka desimal.
 - Pencarian dan pagination pada daftar data.
 - Kartu stok untuk melihat transaksi barang masuk dan keluar.
 - Transaksi penjualan dengan validasi stok dan pengurangan stok otomatis.

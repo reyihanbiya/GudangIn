@@ -43,10 +43,10 @@
                 <thead><tr><th>Barang</th><th>Jumlah</th><th>Harga satuan</th><th>Subtotal</th></tr></thead>
                 <tbody>
                     @foreach ($lines as $line)
-                        @php($lineSubtotal = $line->subtotal ?? ((float) $line->{$priceField} * (int) $line->jumlah_barang))
+                        @php($lineSubtotal = $line->subtotal ?? ((float) $line->{$priceField} * (float) $line->jumlah_barang))
                         <tr>
                             <td>{{ $line->persediaan->nama_barang }}</td>
-                            <td>{{ $line->jumlah_barang }}</td>
+                            <td>{{ \App\Support\QuantityFormatter::format($line->jumlah_barang) }} {{ $line->satuan ?: $line->persediaan->satuan }}</td>
                             <td>Rp {{ number_format((float) $line->{$priceField}, 0, ',', '.') }}</td>
                             <td>Rp {{ number_format((float) $lineSubtotal, 0, ',', '.') }}</td>
                         </tr>
