@@ -29,3 +29,4 @@ class Owner extends Authenticatable
         ];
     }
 }
+//nasbajd
