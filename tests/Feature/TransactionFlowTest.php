@@ -8,11 +8,13 @@ use App\Models\Pembelian;
 use App\Models\Penjualan;
 use App\Models\Persediaan;
 use App\Models\Supplier;
+use App\Services\ReceiptOcrService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class TransactionFlowTest extends TestCase
@@ -147,6 +149,73 @@ class TransactionFlowTest extends TestCase
         $this->actingAs($this->employee, 'employee')
             ->get(route('employee.penjualan.show', Penjualan::query()->firstOrFail()))
             ->assertSee('2 sak');
+    }
+
+    public function test_purchase_form_does_not_show_delivery_status_field(): void
+    {
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pembelian.create'))
+            ->assertOk()
+            ->assertDontSee('Status pengiriman');
+    }
+
+    public function test_purchase_actions_support_edit_delete_and_receive_without_detail_action(): void
+    {
+        $purchase = Pembelian::query()->create([
+            'id_pembelian' => 'PB000001',
+            'id_supplier' => $this->supplier->id_supplier,
+            'id_pegawai' => $this->employee->id_pegawai,
+            'tanggal' => today()->toDateString(),
+            'status_pengiriman' => 'Diproses',
+        ]);
+        $purchase->detailPembelian()->create([
+            'id_persediaan' => $this->product->id_persediaan,
+            'satuan' => 'sak',
+            'harga_beli' => 60000,
+            'jumlah_barang' => 4,
+        ]);
+
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pembelian.index'))
+            ->assertOk()
+            ->assertSee('Ubah')
+            ->assertSee('Hapus')
+            ->assertSee('Terima')
+            ->assertSee('Detail pembelian')
+            ->assertDontSee('>Detail<');
+
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pembelian.details'))
+            ->assertOk()
+            ->assertSee('Detail pembelian')
+            ->assertSee('Semen')
+            ->assertSee('PB000001');
+
+        $this->actingAs($this->employee, 'employee')
+            ->put(route('employee.pembelian.update', $purchase), [
+                'id_supplier' => $this->supplier->id_supplier,
+                'tanggal' => today()->toDateString(),
+                'items' => [[
+                    'id_persediaan' => $this->product->id_persediaan,
+                    'jumlah_barang' => 6,
+                    'harga_beli' => 55000,
+                ]],
+            ])
+            ->assertRedirect(route('employee.pembelian.index'));
+
+        $this->assertDatabaseHas('detail_pembelian', [
+            'id_pembelian' => $purchase->id_pembelian,
+            'jumlah_barang' => 6,
+            'harga_beli' => 55000,
+        ]);
+
+        $this->actingAs($this->employee, 'employee')
+            ->delete(route('employee.pembelian.destroy', $purchase))
+            ->assertRedirect(route('employee.pembelian.index'));
+
+        $this->assertDatabaseMissing('pembelian', [
+            'id_pembelian' => $purchase->id_pembelian,
+        ]);
     }
 
     public function test_sale_accepts_fractional_quantities_in_inventory_unit(): void
@@ -346,7 +415,6 @@ class TransactionFlowTest extends TestCase
             ->post(route('employee.pembelian.store'), [
                 'id_supplier' => $this->supplier->id_supplier,
                 'tanggal' => today()->toDateString(),
-                'status_pengiriman' => 'Diproses',
                 'items' => [[
                     'id_persediaan' => $this->product->id_persediaan,
                     'jumlah_barang' => 4,
@@ -355,7 +423,7 @@ class TransactionFlowTest extends TestCase
             ]);
 
         $purchase = Pembelian::query()->firstOrFail();
-        $response->assertRedirect(route('employee.pembelian.show', $purchase));
+        $response->assertRedirect(route('employee.pembelian.index'));
         $this->assertDatabaseHas('persediaan', [
             'id_persediaan' => $this->product->id_persediaan,
             'stok' => 5,
@@ -404,12 +472,24 @@ class TransactionFlowTest extends TestCase
                 ]],
             ]);
 
-        $response->assertRedirect();
+        $response->assertRedirect(route('employee.pembelian.index'));
+        $purchase = Pembelian::query()->firstOrFail();
+        $this->assertSame('Diproses', $purchase->status_pengiriman);
         $this->assertDatabaseHas('detail_pembelian', [
             'id_persediaan' => $this->product->id_persediaan,
             'jumlah_barang' => '1.125',
             'satuan' => 'meter',
         ]);
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => '3.250',
+            'satuan' => 'meter',
+        ]);
+
+        $this->actingAs($this->employee, 'employee')
+            ->patch(route('employee.pembelian.status', $purchase), ['status_pengiriman' => 'Diterima'])
+            ->assertRedirect(route('employee.pembelian.show', $purchase));
+
         $this->assertDatabaseHas('persediaan', [
             'id_persediaan' => $this->product->id_persediaan,
             'stok' => '4.375',
@@ -447,6 +527,42 @@ class TransactionFlowTest extends TestCase
         ]);
     }
 
+    public function test_purchase_ocr_api_returns_json_and_receipt_token(): void
+    {
+        Storage::fake('local');
+
+        $this->mock(ReceiptOcrService::class, function ($mock): void {
+            $mock->shouldReceive('extract')->once()->andReturn('NOTA PEMBELIAN');
+        });
+
+        $response = $this->actingAs($this->employee, 'employee')
+            ->postJson(route('employee.pembelian.ocr.api'), [
+                'receipt' => UploadedFile::fake()->createWithContent(
+                    'nota.png',
+                    base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=')
+                )->mimeType('image/png'),
+            ]);
+
+        $response->assertCreated()
+            ->assertJson([
+                'success' => true,
+                'message' => 'Nota berhasil diproses.',
+                'data' => [
+                    'hasil_ocr' => 'NOTA PEMBELIAN',
+                ],
+            ])
+            ->assertJsonStructure([
+                'data' => ['receipt_token', 'hasil_ocr', 'file_path'],
+            ]);
+
+        $token = $response->json('data.receipt_token');
+        $this->assertTrue(is_string($token) && Str::isUuid($token));
+        $this->assertArrayHasKey(
+            $token,
+            session('receipt_drafts', [])
+        );
+    }
+
     public function test_ocr_review_is_saved_with_the_purchase_and_private_receipt(): void
     {
         Storage::fake('local');
@@ -469,7 +585,6 @@ class TransactionFlowTest extends TestCase
                 'hasil_ocr' => 'Teks OCR yang sudah diperiksa',
                 'id_supplier' => $this->supplier->id_supplier,
                 'tanggal' => today()->toDateString(),
-                'status_pengiriman' => 'Diproses',
                 'items' => [[
                     'id_persediaan' => $this->product->id_persediaan,
                     'jumlah_barang' => 2,
