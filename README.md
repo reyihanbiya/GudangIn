@@ -35,8 +35,9 @@ Biarkan terminal tetap terbuka selama aplikasi digunakan. Halaman penyiapan hany
 
 ## Fitur yang tersedia
 
-- Login terpisah untuk Pegawai dan Owner; penyiapan awal dapat membuat beberapa akun untuk kedua peran sekaligus.
+- Pendaftaran Pegawai tersedia dari halaman masuk kapan saja; akun Owner hanya dapat dibuat oleh Owner yang sudah login. Penyiapan awal juga dapat membuat beberapa akun untuk kedua peran sekaligus.
 - Dashboard ringkasan untuk kedua peran.
+- Dashboard menampilkan penjualan/pembelian harian, tren penjualan 7 hari, serta perkiraan stok habis dalam 7 hari berdasarkan laju penjualan pada satuan yang sama.
 - Pengelolaan pelanggan, supplier, dan persediaan.
 - Satuan stok per barang (mis. sak, kg, meter, atau liter) dengan jumlah hingga tiga angka desimal.
 - Pencarian dan pagination pada daftar data.

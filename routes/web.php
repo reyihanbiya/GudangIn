@@ -2,7 +2,10 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EmployeeRegistrationController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\OwnerAccountController;
+use App\Http\Controllers\OwnerRegistrationController;
 use App\Http\Controllers\PembelianController;
 use App\Http\Controllers\PelangganController;
 use App\Http\Controllers\PenjualanController;
@@ -24,6 +27,15 @@ Route::get('/login', [AuthController::class, 'employeeForm'])->name('login');
 Route::post('/login', [AuthController::class, 'employeeLogin'])
     ->middleware('throttle:5,1')
     ->name('login.store');
+Route::get('/register', [EmployeeRegistrationController::class, 'chooseRole'])->name('register');
+Route::get('/register/pegawai', [EmployeeRegistrationController::class, 'create'])->name('register.employee');
+Route::post('/register/pegawai', [EmployeeRegistrationController::class, 'store'])
+    ->middleware('throttle:5,1')
+    ->name('register.employee.store');
+Route::get('/register/owner', [OwnerRegistrationController::class, 'create'])->name('register.owner');
+Route::post('/register/owner', [OwnerRegistrationController::class, 'store'])
+    ->middleware('throttle:5,1')
+    ->name('register.owner.store');
 Route::get('/owner/login', [AuthController::class, 'ownerForm'])->name('owner.login');
 Route::post('/owner/login', [AuthController::class, 'ownerLogin'])
     ->middleware('throttle:5,1')
@@ -64,6 +76,8 @@ Route::middleware('auth:employee')->prefix('employee')->name('employee.')->group
 
 Route::middleware('auth:owner')->prefix('owner')->name('owner.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'owner'])->name('dashboard');
+    Route::get('/accounts', [OwnerAccountController::class, 'index'])->name('accounts.index');
+    Route::post('/accounts', [OwnerAccountController::class, 'store'])->name('accounts.store');
     Route::get('/reports/sales', [ReportController::class, 'sales'])->name('reports.sales');
     Route::get('/reports/purchases', [ReportController::class, 'purchases'])->name('reports.purchases');
     Route::post('/logout', [AuthController::class, 'ownerLogout'])->name('logout');

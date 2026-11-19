@@ -74,6 +74,10 @@ a { color: inherit; }
 .setup-panel .setup-account-card legend { margin-bottom: 4px; }
 .setup-panel .setup-account-card > label { color: #514337; font-size: 12px; font-weight: 700; }
 .setup-remove-account { align-self: flex-start; margin-top: 3px; }
+.register-role-options { display: grid; gap: 14px; margin-top: 20px; }
+.register-role-card { padding: 16px; border: 1px solid #eee4dc; border-radius: 10px; }
+.register-role-card h3 { margin: 0 0 6px; font-size: 15px; }
+.register-role-card p { margin: 0 0 14px; color: #82766b; font-size: 12px; line-height: 1.5; }
 .message-panel { max-width: 760px; margin: auto; padding: 42px; border: 1px solid #eee4dc; border-radius: 18px; background: #fff; }
 .message-panel h1 { font-size: 38px; }
 .message-panel > p:not(.eyebrow) { color: #66574b; line-height: 1.7; }
@@ -163,6 +167,37 @@ td { color: #514337; }
 .stat-card strong { display: block; overflow-wrap: anywhere; color: #764c2d; font-size: clamp(23px, 3vw, 32px); letter-spacing: -.04em; }
 .stat-card span { display: block; margin-top: 8px; color: #82766b; font-size: 12px; }
 .stat-link { display: inline-block; margin-top: 12px; font-size: 12px; text-decoration: none; }
+.dashboard-stats { gap: 14px; }
+.dashboard-stats .stat-card { min-height: 132px; padding: 16px 18px; box-shadow: 0 3px 12px #40291005; }
+.stat-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.stat-card-heading p { margin: 0; color: #82766b; font-size: 11px; font-weight: 600; }
+.stat-card-heading span { margin: 0; color: #a67551; font-size: 18px; }
+.dashboard-stats .stat-card > strong { margin-top: 12px; color: #302820; font-size: clamp(22px, 2.4vw, 28px); }
+.dashboard-stats .stat-card > span { margin-top: 7px; color: #64806c; font-size: 10px; }
+.dashboard-panels { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 16px; margin: 18px 0 30px; }
+.dashboard-panel { min-width: 0; padding: 18px; border: 1px solid #eee4dc; border-radius: 13px; background: #fff; }
+.dashboard-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.dashboard-panel-heading h2 { margin: 2px 0 5px; color: #302820; font-size: 15px; }
+.dashboard-panel-heading p { margin: 0; color: #958a80; font-size: 10px; line-height: 1.5; }
+.dashboard-badge { flex: 0 0 auto; padding: 6px 9px; border-radius: 7px; color: #805333; background: #f1e4d9; font-size: 9px; font-weight: 650; }
+.dashboard-badge-warning { color: #9c651d; background: #fbf1dc; }
+.sales-trend-total { display: block; margin-top: 17px; color: #302820; font-size: 22px; letter-spacing: -.03em; }
+.sales-chart { height: 174px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin-top: 15px; }
+.sales-chart-column { min-width: 0; display: grid; grid-template-rows: 15px minmax(0, 1fr) 16px; gap: 5px; align-items: end; text-align: center; }
+.sales-chart-value { overflow: hidden; color: #8a7d71; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.sales-chart-track { height: 100%; display: flex; align-items: flex-end; border-bottom: 1px solid #eee4dc; background: repeating-linear-gradient(to top, transparent 0, transparent 48px, #f3efeb 49px, transparent 50px); }
+.sales-chart-bar { width: 100%; min-height: 0; display: block; border-radius: 5px 5px 0 0; background: #efdfd2; }
+.sales-chart-column:last-child .sales-chart-bar { background: #764c2d; }
+.sales-chart-day { color: #8a7d71; font-size: 9px; }
+.low-stock-panel { display: flex; flex-direction: column; }
+.low-stock-list { display: grid; gap: 0; margin: 14px 0 8px; padding: 0; list-style: none; }
+.low-stock-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f3efeb; }
+.low-stock-list li > div { min-width: 0; display: grid; gap: 4px; }
+.low-stock-list li strong { overflow: hidden; color: #41382f; font-size: 10px; text-overflow: ellipsis; }
+.low-stock-list li span { color: #958a80; font-size: 9px; }
+.low-stock-list li .low-stock-quantity { flex: 0 0 auto; color: #9b651d; font-size: 10px; white-space: nowrap; }
+.low-stock-empty { margin: 22px 0; color: #82766b; font-size: 11px; line-height: 1.6; }
+.dashboard-footnote { margin: auto 0 0; padding-top: 10px; color: #9a9087; font-size: 9px; line-height: 1.5; }
 .next-step { margin: 30px 0 50px; padding: 25px 30px; display: flex; align-items: center; justify-content: space-between; border-radius: 14px; background: #efe1d6; }
 .next-step h2 { margin: 8px 0; font-size: 20px; }
 .next-step p:not(.eyebrow) { max-width: 650px; margin: 0; color: #66574b; font-size: 14px; line-height: 1.65; }
@@ -262,6 +297,7 @@ td { color: #514337; }
     .login-panel, .form-panel { padding: 25px; }
     .feature-strip { grid-template-columns: 1fr; gap: 18px; }
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .dashboard-panels { grid-template-columns: 1fr; }
     .setup-panel { max-height: none; }
     .page-heading { align-items: flex-start; flex-direction: column; }
     .heading-actions { width: 100%; }

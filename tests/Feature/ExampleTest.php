@@ -16,6 +16,7 @@ class ExampleTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertSee('Masuk sebagai Pegawai');
+        $response->assertSee('Buat akun baru');
     }
 
     public function test_employee_master_data_requires_employee_login(): void
