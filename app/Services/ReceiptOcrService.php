@@ -14,7 +14,15 @@ class ReceiptOcrService
         $binary = (string) config('services.tesseract.binary', 'tesseract');
         $languages = (string) config('services.tesseract.languages', 'eng+ind');
         $timeout = (int) config('services.tesseract.timeout', 60);
-        $process = new Process([$binary, $imagePath, 'stdout', '-l', $languages]);
+        $process = new Process([
+            $binary,
+            $imagePath,
+            'stdout',
+            '-l',
+            $languages,
+            '--psm',
+            '6',
+        ]);
         $process->setTimeout($timeout);
 
         try {

@@ -47,6 +47,9 @@ Route::middleware('auth:employee')->prefix('employee')->name('employee.')->group
     Route::post('/pembelian/ocr', [ReceiptOcrController::class, 'process'])
         ->middleware('throttle:10,1')
         ->name('pembelian.ocr.process');
+    Route::post('/pembelian/ocr/api', [ReceiptOcrController::class, 'processApi'])
+        ->middleware('throttle:10,1')
+        ->name('pembelian.ocr.api');
     Route::get('/pembelian/ocr/{token}', [ReceiptOcrController::class, 'review'])
         ->name('pembelian.ocr.review');
     Route::post('/pembelian/ocr/{token}/discard', [ReceiptOcrController::class, 'discard'])
@@ -54,10 +57,14 @@ Route::middleware('auth:employee')->prefix('employee')->name('employee.')->group
     Route::post('/pembelian/ocr/confirm', [PembelianController::class, 'storeFromOcr'])
         ->name('pembelian.ocr.store');
     Route::post('/pembelian', [PembelianController::class, 'store'])->name('pembelian.store');
+    Route::get('/pembelian/detail', [PembelianController::class, 'details'])->name('pembelian.details');
     Route::get('/pembelian/{pembelian}/nota', [ReceiptOcrController::class, 'download'])
         ->name('pembelian.receipt.download');
     Route::patch('/pembelian/{pembelian}/status', [PembelianController::class, 'updateStatus'])
         ->name('pembelian.status');
+    Route::get('/pembelian/{pembelian}/edit', [PembelianController::class, 'edit'])->name('pembelian.edit');
+    Route::put('/pembelian/{pembelian}', [PembelianController::class, 'update'])->name('pembelian.update');
+    Route::delete('/pembelian/{pembelian}', [PembelianController::class, 'destroy'])->name('pembelian.destroy');
     Route::get('/pembelian/{pembelian}', [PembelianController::class, 'show'])->name('pembelian.show');
     Route::post('/logout', [AuthController::class, 'employeeLogout'])->name('logout');
 });

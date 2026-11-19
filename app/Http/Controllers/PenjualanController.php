@@ -59,7 +59,6 @@ class PenjualanController extends Controller
             'counterparts' => Pelanggan::query()->orderBy('nama_pelanggan')->get(),
             'products' => Persediaan::query()->orderBy('nama_barang')->get(),
             'date' => today()->toDateString(),
-            'showStatus' => false,
         ]);
     }
 

@@ -8,19 +8,35 @@
     $partyName = $type === 'Penjualan' ? 'nama_pelanggan' : 'nama_supplier';
     $priceField = $type === 'Penjualan' ? 'harga_satuan' : 'harga_beli';
     $priceLabel = $type === 'Penjualan' ? 'Harga jual satuan' : 'Harga beli satuan';
-    $oldItems = old('items', [[
-        'id_persediaan' => '',
-        'jumlah_barang' => '',
-        $priceField => '',
-    ]]);
+    $oldItems = old('items');
+    if ($oldItems === null) {
+        if (isset($oldTransaction)) {
+            $oldItems = $oldTransaction->detailPembelian->map(fn ($line) => [
+                'id_persediaan' => $line->id_persediaan,
+                'jumlah_barang' => $line->jumlah_barang,
+                $priceField => $line->{$priceField},
+            ])->all();
+        } elseif (isset($ocrPrefill) && ($ocrPrefill['items'] ?? []) !== []) {
+            $oldItems = $ocrPrefill['items'];
+        } else {
+            $oldItems = [[
+                'id_persediaan' => '',
+                'jumlah_barang' => '',
+                $priceField => '',
+            ]];
+        }
+    }
 @endphp
 
 @section('content')
     <section class="page-heading">
         <div>
             <p class="eyebrow">Transaksi</p>
-            <h1>Buat {{ strtolower($type) }}</h1>
-            <p class="lead">Isi rincian dengan benar. Stok akan diperbarui saat transaksi disimpan sesuai statusnya.</p>
+            <h1>{{ isset($oldTransaction) ? 'Ubah' : 'Buat' }} {{ strtolower($type) }}</h1>
+            <p class="lead">
+                Isi rincian dengan benar.
+                {{ $type === 'Pembelian' ? 'Stok akan bertambah setelah pembelian dikonfirmasi diterima.' : 'Stok akan berkurang otomatis saat penjualan disimpan.' }}
+            </p>
         </div>
     </section>
 
@@ -30,13 +46,16 @@
         @endif
         <form method="POST" action="{{ $action }}" class="stack-form">
             @csrf
+            @if (isset($method))
+                @method($method)
+            @endif
             <div class="transaction-meta">
                 <div>
                     <label for="{{ $partyField }}">{{ $partyLabel }}</label>
                     <select id="{{ $partyField }}" name="{{ $partyField }}" required>
                         <option value="">Pilih {{ strtolower($partyLabel) }}</option>
                         @foreach ($counterparts as $counterpart)
-                            <option value="{{ $counterpart->getKey() }}" @selected(old($partyField) === $counterpart->getKey())>
+                            <option value="{{ $counterpart->getKey() }}" @selected(old($partyField, $oldTransaction->{$partyField} ?? ($ocrPrefill['id_supplier'] ?? '')) === $counterpart->getKey())>
                                 {{ $counterpart->{$partyName} }}
                             </option>
                         @endforeach
@@ -44,17 +63,8 @@
                 </div>
                 <div>
                     <label for="tanggal">Tanggal</label>
-                    <input id="tanggal" name="tanggal" type="date" value="{{ old('tanggal', $date) }}" required>
+                    <input id="tanggal" name="tanggal" type="date" value="{{ old('tanggal', $oldTransaction->tanggal ?? ($ocrPrefill['tanggal'] ?? $date)) }}" required>
                 </div>
-                @if ($showStatus)
-                    <div>
-                        <label for="status_pengiriman">Status pengiriman</label>
-                        <select id="status_pengiriman" name="status_pengiriman" required>
-                            <option value="Diproses" @selected(old('status_pengiriman', 'Diproses') === 'Diproses')>Diproses</option>
-                            <option value="Diterima" @selected(old('status_pengiriman') === 'Diterima')>Diterima (stok langsung bertambah)</option>
-                        </select>
-                    </div>
-                @endif
             </div>
 
             <div class="line-heading">
@@ -84,6 +94,7 @@
                                 @foreach ($products as $product)
                                     <option
                                         value="{{ $product->id_persediaan }}"
+                                        data-unit="{{ $product->satuan }}"
                                         @selected(($oldItem['id_persediaan'] ?? '') === $product->id_persediaan)
                                         @disabled($type === 'Penjualan' && $product->stok <= 0)
                                     >
@@ -94,7 +105,10 @@
                         </div>
                         <div>
                             <label for="item-{{ $index }}-quantity">Jumlah barang (gunakan satuan barang)</label>
-                            <input id="item-{{ $index }}-quantity" name="items[{{ $index }}][jumlah_barang]" type="number" min="0.001" step="0.001" value="{{ $oldItem['jumlah_barang'] ?? '' }}">
+                            <div class="quantity-input-wrap">
+                                <input id="item-{{ $index }}-quantity" name="items[{{ $index }}][jumlah_barang]" type="number" min="0.001" step="0.001" value="{{ $oldItem['jumlah_barang'] ?? '' }}">
+                                <span class="quantity-unit" data-quantity-unit>{{ $oldItem['satuan'] ?? '' }}</span>
+                            </div>
                         </div>
                         <div>
                             <label for="item-{{ $index }}-price">{{ $priceLabel }}</label>
@@ -113,14 +127,17 @@
                             <option value="">Pilih barang</option>
                             @foreach ($products as $product)
                                 @if ($type !== 'Penjualan' || $product->stok > 0)
-                                    <option value="{{ $product->id_persediaan }}">{{ $product->nama_barang }} (stok: {{ \App\Support\QuantityFormatter::format($product->stok) }} {{ $product->satuan }})</option>
+                                    <option value="{{ $product->id_persediaan }}" data-unit="{{ $product->satuan }}">{{ $product->nama_barang }} (stok: {{ \App\Support\QuantityFormatter::format($product->stok) }} {{ $product->satuan }})</option>
                                 @endif
                             @endforeach
                         </select>
                     </div>
                     <div>
                         <label for="item-__INDEX__-quantity">Jumlah barang (gunakan satuan barang)</label>
-                        <input id="item-__INDEX__-quantity" name="items[__INDEX__][jumlah_barang]" type="number" min="0.001" step="0.001">
+                        <div class="quantity-input-wrap">
+                            <input id="item-__INDEX__-quantity" name="items[__INDEX__][jumlah_barang]" type="number" min="0.001" step="0.001">
+                            <span class="quantity-unit" data-quantity-unit></span>
+                        </div>
                     </div>
                     <div>
                         <label for="item-__INDEX__-price">{{ $priceLabel }}</label>
@@ -132,7 +149,7 @@
 
             <div class="form-actions">
                 <a class="button button-secondary" href="{{ route($type === 'Penjualan' ? 'employee.penjualan.index' : 'employee.pembelian.index') }}">Batal</a>
-                <button class="button button-primary" type="submit">Simpan {{ strtolower($type) }}</button>
+                <button class="button button-primary" type="submit">{{ $submitLabel ?? 'Simpan '.strtolower($type) }}</button>
             </div>
         </form>
         @if (isset($receiptToken))
@@ -152,6 +169,22 @@
             const addButton = document.getElementById('add-transaction-line');
             let nextIndex = Number(list.dataset.nextIndex);
 
+            const updateQuantityUnit = (row) => {
+                const product = row.querySelector('select');
+                const selected = product?.selectedOptions[0];
+                const unit = row.querySelector('[data-quantity-unit]');
+                if (unit && unit.textContent.trim() === '') {
+                    unit.textContent = selected?.dataset.unit || '';
+                }
+            };
+
+            list.querySelectorAll('[data-transaction-line]').forEach(updateQuantityUnit);
+
+            list.addEventListener('change', (event) => {
+                const row = event.target.closest('[data-transaction-line]');
+                if (row && event.target.matches('select')) updateQuantityUnit(row);
+            });
+
             addButton.addEventListener('click', () => {
                 const row = template.content.cloneNode(true);
                 row.querySelectorAll('[name], [id], [for]').forEach((element) => {
@@ -163,6 +196,7 @@
                 });
                 list.appendChild(row);
                 nextIndex += 1;
+                updateQuantityUnit(list.lastElementChild);
             });
 
             list.addEventListener('click', (event) => {
