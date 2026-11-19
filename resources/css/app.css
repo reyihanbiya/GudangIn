@@ -90,6 +90,39 @@ a { color: inherit; }
 .page-heading h1 { margin: 9px 0; font-size: 38px; letter-spacing: -.05em; }
 .page-heading .lead { margin: 0; font-size: 14px; }
 .table-panel { overflow: hidden; border: 1px solid #eee4dc; border-radius: 14px; background: white; }
+.inventory-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+.inventory-summary-card { min-height: 104px; padding: 16px 18px; border: 1px solid #eee4dc; border-radius: 12px; background: #fff; }
+.inventory-summary-card p { margin: 0 0 4px; color: #66574b; font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; }
+.inventory-summary-card strong { display: block; color: #764c2d; font-size: 27px; line-height: 1.15; }
+.inventory-summary-card span { display: inline-block; margin-top: 6px; padding: 3px 8px; border-radius: 99px; color: #66574b; background: #f4ece5; font-size: 10px; }
+.inventory-summary-low strong { color: #a56d18; }
+.inventory-summary-low span { color: #8c5a0f; background: #fff0d3; }
+.inventory-summary-empty strong { color: #b34036; }
+.inventory-summary-empty span { color: #a13d31; background: #fde4e1; }
+.inventory-panel { margin-bottom: 28px; }
+.inventory-search { display: flex; align-items: center; gap: 9px; padding: 13px 15px 8px; }
+.inventory-search input { width: min(100%, 560px); height: 38px; padding: 0 11px; border: 1px solid #ded2c8; border-radius: 8px; font: inherit; font-size: 12px; outline: none; }
+.inventory-search input:focus { border-color: #a67551; box-shadow: 0 0 0 3px #a675511f; }
+.inventory-search .button { min-height: 38px; font-size: 12px; }
+.inventory-search .text-link { font-size: 12px; white-space: nowrap; }
+.inventory-categories { min-height: 43px; display: flex; align-items: center; gap: 7px; padding: 0 15px 10px; overflow-x: auto; }
+.inventory-category { flex: 0 0 auto; padding: 5px 11px; border: 1px solid #eee4dc; border-radius: 99px; color: #66574b; background: #fff; font-size: 10px; font-weight: 650; text-decoration: none; }
+.inventory-category:hover, .inventory-category.active { border-color: #764c2d; color: #fff; background: #764c2d; }
+.inventory-table { min-width: 760px; }
+.inventory-table th, .inventory-table td { padding: 12px 13px; font-size: 11px; }
+.inventory-table th { font-size: 9px; }
+.inventory-table .actions-heading { min-width: 110px; }
+.inventory-code { color: #8a7b6e; white-space: nowrap; }
+.inventory-name { color: #39322c; font-weight: 750; }
+.inventory-stock { min-width: 88px; display: grid; grid-template-columns: auto; gap: 4px; color: #453b33; font-weight: 750; white-space: nowrap; }
+.inventory-stock-track { width: 70px; height: 4px; display: block; overflow: hidden; border-radius: 99px; background: #eee5dc; }
+.inventory-stock-fill { height: 100%; display: block; border-radius: inherit; background: #39925a; }
+.inventory-stock-fill.inventory-stock-menipis { background: #d29125; }
+.inventory-stock-fill.inventory-stock-habis { background: #c94d43; }
+.inventory-status { display: inline-block; padding: 4px 9px; border-radius: 99px; font-size: 9px; font-weight: 750; white-space: nowrap; }
+.inventory-status-aman { color: #286344; background: #e2f1e6; }
+.inventory-status-menipis { color: #8c5a0f; background: #fff0d3; }
+.inventory-status-habis { color: #a13d31; background: #fde4e1; }
 .search-form { display: flex; align-items: center; gap: 10px; padding: 17px; border-bottom: 1px solid #eee4dc; }
 .search-form input { width: min(100%, 340px); height: 42px; padding: 0 12px; border: 1px solid #ded2c8; border-radius: 8px; font: inherit; outline: none; }
 .search-form input:focus, .stack-form textarea:focus { border-color: #a67551; box-shadow: 0 0 0 3px #a675511f; }
@@ -170,7 +203,7 @@ td { color: #514337; }
 .footer { margin-top: auto; padding: 20px 0; border-top: 1px solid #e8ddd3; color: #764c2d; font-size: 12px; font-weight: 800; }
 .footer span { margin-left: 8px; color: #82766b; font-weight: 500; }
 .app-shell-body { min-width: 320px; height: 100vh; overflow: hidden; background: #f7f5f2; }
-.cashier-layout { width: 100%; height: 100vh; display: grid; grid-template-columns: 220px minmax(0, 1fr); overflow: hidden; }
+.cashier-layout { width: 100%; height: 100vh; display: grid; grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
 .cashier-sidebar { min-width: 0; display: flex; flex-direction: column; padding: 22px 14px 18px; border-right: 1px solid #eee9e4; background: #fff; }
 .cashier-sidebar .brand { gap: 8px; padding: 0 3px 28px; font-size: 17px; }
 .cashier-sidebar .brand-mark { width: 28px; height: 28px; }
@@ -186,7 +219,7 @@ td { color: #514337; }
 .cashier-sidebar-bottom form { margin: 0; }
 .cashier-logout { padding: 0; border: 0; color: #9c5e48; background: transparent; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; text-align: left; }
 .cashier-workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-.app-workspace { overflow-y: auto; background: #f7f5f2; }
+.app-workspace { min-height: 0; flex: 1; overflow-y: auto; background: #f7f5f2; }
 .app-page-shell { width: 100%; max-width: none; min-height: calc(100vh - 82px); margin: 0; padding: 0 24px; }
 .app-workspace .page-heading { padding-top: 32px; padding-bottom: 20px; }
 .app-workspace .page-heading h1 { font-size: 32px; }
@@ -265,6 +298,8 @@ td { color: #514337; }
     .setup-panel { max-height: none; }
     .page-heading { align-items: flex-start; flex-direction: column; }
     .heading-actions { width: 100%; }
+    .inventory-search { flex-wrap: wrap; }
+    .inventory-search input { flex: 1 1 230px; }
     .main-nav { gap: 18px; overflow-x: auto; }
     .transaction-line { grid-template-columns: 1fr 1fr; }
     .transaction-line > div:first-child { grid-column: 1 / -1; }
@@ -292,6 +327,10 @@ td { color: #514337; }
     .message-panel { padding: 25px; }
     .topbar-user span { display: none; }
     .search-form { flex-wrap: wrap; }
+    .inventory-summary { grid-template-columns: 1fr; gap: 9px; }
+    .inventory-summary-card { min-height: 90px; }
+    .inventory-search { padding-right: 10px; padding-left: 10px; }
+    .inventory-categories { padding-right: 10px; padding-left: 10px; }
     .transaction-meta, .transaction-summary { grid-template-columns: 1fr; }
     .line-heading { align-items: flex-start; flex-direction: column; }
     .report-filter { align-items: stretch; flex-direction: column; }

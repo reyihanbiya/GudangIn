@@ -2,16 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DetailPenjualan;
 use App\Models\Persediaan;
 use App\Services\CodeGeneratorService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class PersediaanController extends Controller
 {
+    private const LOW_STOCK_THRESHOLD = 15;
+
     private const INVENTORY_UNITS = [
         'pcs' => 'Pcs',
         'unit' => 'Unit',
@@ -41,37 +43,64 @@ class PersediaanController extends Controller
 
     public function index(Request $request): View
     {
-        $search = $request->validate([
+        $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
-        ])['search'] ?? null;
+            'category' => ['nullable', 'string', 'max:50'],
+        ]);
+        $search = $filters['search'] ?? null;
+        $category = $filters['category'] ?? null;
+
+        $summary = Persediaan::query()
+            ->selectRaw('COUNT(*) AS total_items')
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN stok > 0 AND stok <= ? THEN 1 ELSE 0 END), 0) AS low_stock_items',
+                [self::LOW_STOCK_THRESHOLD]
+            )
+            ->selectRaw('COALESCE(SUM(CASE WHEN stok <= 0 THEN 1 ELSE 0 END), 0) AS out_of_stock_items')
+            ->first();
+
+        $categories = Persediaan::query()
+            ->whereNotNull('kategori_barang')
+            ->where('kategori_barang', '<>', '')
+            ->distinct()
+            ->orderBy('kategori_barang')
+            ->pluck('kategori_barang');
+
+        $lastSalePrice = DetailPenjualan::query()
+            ->join('penjualan', 'penjualan.id_penjualan', '=', 'detail_penjualan.id_penjualan')
+            ->whereColumn('detail_penjualan.id_persediaan', 'persediaan.id_persediaan')
+            ->orderByDesc('penjualan.tanggal')
+            ->orderByDesc('detail_penjualan.id_detail')
+            ->select('detail_penjualan.harga_satuan')
+            ->limit(1);
 
         $inventory = Persediaan::query()
+            ->select(['id_persediaan', 'nama_barang', 'kategori_barang', 'satuan', 'stok'])
+            ->selectSub($lastSalePrice, 'harga_jual')
             ->when($search, function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
-                    $query->where('nama_barang', 'like', "%{$search}%")
+                    $query->where('id_persediaan', 'like', "%{$search}%")
+                        ->orWhere('nama_barang', 'like', "%{$search}%")
                         ->orWhere('kategori_barang', 'like', "%{$search}%")
                         ->orWhere('satuan', 'like', "%{$search}%");
                 });
             })
+            ->when($category, fn ($query, string $category) => $query->where('kategori_barang', $category))
             ->orderBy('nama_barang')
             ->paginate(10)
             ->withQueryString();
 
-        return view('masters.index', [
-            'title' => 'Persediaan',
-            'description' => 'Kelola barang, satuan ukur, dan jumlah stok yang tersedia.',
+        return view('masters.inventory-index', [
+            'summary' => $summary,
+            'categories' => $categories,
+            'maxStock' => (float) (Persediaan::query()->max('stok') ?? 0),
+            'lowStockThreshold' => self::LOW_STOCK_THRESHOLD,
+            'search' => $search,
+            'selectedCategory' => $category,
+            'rows' => $inventory,
             'createRoute' => 'employee.persediaan.create',
             'editRoute' => 'employee.persediaan.edit',
             'deleteRoute' => 'employee.persediaan.destroy',
-            'search' => $search,
-            'columns' => [
-                ['label' => 'ID', 'field' => 'id_persediaan'],
-                ['label' => 'Nama barang', 'field' => 'nama_barang'],
-                ['label' => 'Kategori', 'field' => 'kategori_barang'],
-                ['label' => 'Stok', 'field' => 'stok_dengan_satuan'],
-            ],
-            'rows' => $inventory,
-            'stockCardRoute' => 'employee.persediaan.stock-card',
         ]);
     }
 
@@ -131,31 +160,6 @@ class PersediaanController extends Controller
         $persediaan->delete();
 
         return redirect()->route('employee.persediaan.index')->with('status', 'Barang berhasil dihapus.');
-    }
-
-    public function stockCard(Persediaan $persediaan): View
-    {
-        $purchases = DB::table('detail_pembelian as detail')
-            ->join('pembelian as purchase', 'purchase.id_pembelian', '=', 'detail.id_pembelian')
-            ->where('detail.id_persediaan', $persediaan->id_persediaan)
-            ->where('purchase.status_pengiriman', 'Diterima')
-            ->selectRaw(
-                "purchase.tanggal as tanggal, 'Pembelian' as keterangan, purchase.id_pembelian as id_transaksi, detail.jumlah_barang as masuk, 0 as keluar, detail.satuan as satuan"
-            );
-
-        $sales = DB::table('detail_penjualan as detail')
-            ->join('penjualan as sale', 'sale.id_penjualan', '=', 'detail.id_penjualan')
-            ->where('detail.id_persediaan', $persediaan->id_persediaan)
-            ->selectRaw(
-                "sale.tanggal as tanggal, 'Penjualan' as keterangan, sale.id_penjualan as id_transaksi, 0 as masuk, detail.jumlah_barang as keluar, detail.satuan as satuan"
-            );
-
-        $movements = $purchases->unionAll($sales)
-            ->orderBy('tanggal')
-            ->orderBy('id_transaksi')
-            ->paginate(20);
-
-        return view('masters.stock-card', compact('persediaan', 'movements'));
     }
 
     private function form(?Persediaan $persediaan = null): View

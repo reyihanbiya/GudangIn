@@ -32,8 +32,6 @@ Route::post('/owner/login', [AuthController::class, 'ownerLogin'])
 Route::middleware('auth:employee')->prefix('employee')->name('employee.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'employee'])->name('dashboard');
     Route::resource('pelanggan', PelangganController::class)->except(['show']);
-    Route::get('/persediaan/{persediaan}/kartu-stok', [PersediaanController::class, 'stockCard'])
-        ->name('persediaan.stock-card');
     Route::resource('persediaan', PersediaanController::class)->except(['show']);
     Route::resource('supplier', SupplierController::class)->except(['show']);
     Route::get('/penjualan', [PenjualanController::class, 'index'])->name('penjualan.index');

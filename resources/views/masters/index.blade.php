@@ -45,9 +45,6 @@
                                 <td>{{ $row->{$column['field']} ?? '—' }}</td>
                             @endforeach
                             <td class="row-actions">
-                                @if (isset($stockCardRoute))
-                                    <a class="text-link" href="{{ route($stockCardRoute, $row) }}">Kartu stok</a>
-                                @endif
                                 <a class="text-link" href="{{ route($editRoute, $row) }}">Ubah</a>
                                 <form method="POST" action="{{ route($deleteRoute, $row) }}" onsubmit="return confirm('Hapus data ini?')">
                                     @csrf

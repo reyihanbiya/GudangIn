@@ -78,6 +78,16 @@ class MasterDataTest extends TestCase
             $table->string('satuan', 20)->default('unit');
             $table->decimal('stok', 15, 3)->default(0);
         });
+        Schema::create('penjualan', function (Blueprint $table): void {
+            $table->string('id_penjualan', 10)->primary();
+            $table->date('tanggal');
+        });
+        Schema::create('detail_penjualan', function (Blueprint $table): void {
+            $table->increments('id_detail');
+            $table->string('id_penjualan', 10);
+            $table->string('id_persediaan', 10);
+            $table->decimal('harga_satuan', 15, 2);
+        });
 
         $employee = Pegawai::query()->create([
             'id_pegawai' => 'PGW0001',
@@ -113,12 +123,15 @@ class MasterDataTest extends TestCase
         $this->actingAs($employee, 'employee')
             ->get(route('employee.persediaan.index'))
             ->assertOk()
-            ->assertSee('12,75 kg');
+            ->assertSee('12,75 kg')
+            ->assertSee('Harga jual / satuan')
+            ->assertSee('Stok menipis')
+            ->assertDontSee('Kartu stok');
 
         $this->actingAs($employee, 'employee')
             ->post(route('employee.persediaan.store'), [
                 'nama_barang' => 'Tali',
-                'kategori_barang' => 'Material',
+                'kategori_barang' => 'Aksesoris',
                 'satuan' => '__custom__',
                 'satuan_custom' => 'ikat',
                 'stok' => '1',
@@ -129,5 +142,12 @@ class MasterDataTest extends TestCase
             'nama_barang' => 'Tali',
             'satuan' => 'ikat',
         ]);
+
+        $this->actingAs($employee, 'employee')
+            ->get(route('employee.persediaan.index', ['category' => 'Aksesoris']))
+            ->assertOk()
+            ->assertSee('Tali')
+            ->assertDontSee('Pasir')
+            ->assertDontSee('Kartu stok');
     }
 }

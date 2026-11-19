@@ -266,10 +266,6 @@ class TransactionFlowTest extends TestCase
             'stok' => 5,
         ]);
         $this->actingAs($this->employee, 'employee')
-            ->get(route('employee.persediaan.stock-card', $this->product))
-            ->assertDontSee($purchase->id_pembelian);
-
-        $this->actingAs($this->employee, 'employee')
             ->patch(route('employee.pembelian.status', $purchase), ['status_pengiriman' => 'Diterima'])
             ->assertRedirect(route('employee.pembelian.show', $purchase));
 
@@ -277,12 +273,6 @@ class TransactionFlowTest extends TestCase
             'id_persediaan' => $this->product->id_persediaan,
             'stok' => 9,
         ]);
-        $this->actingAs($this->employee, 'employee')
-            ->get(route('employee.persediaan.stock-card', $this->product))
-            ->assertSee($purchase->id_pembelian)
-            ->assertSee('Pembelian')
-            ->assertSee('4 sak');
-
         $this->actingAs($this->employee, 'employee')
             ->patch(route('employee.pembelian.status', $purchase), ['status_pengiriman' => 'Diterima'])
             ->assertSessionHasErrors('status_pengiriman');
