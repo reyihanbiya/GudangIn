@@ -57,6 +57,7 @@ class TransactionFlowTest extends TestCase
             $table->string('kategori_barang', 50)->nullable();
             $table->string('satuan', 20)->default('unit');
             $table->decimal('stok', 15, 3)->default(0);
+            $table->decimal('harga_jual', 15, 2)->nullable();
         });
 
         Schema::create('penjualan', function (Blueprint $table): void {
@@ -115,6 +116,7 @@ class TransactionFlowTest extends TestCase
             'nama_barang' => 'Semen',
             'satuan' => 'sak',
             'stok' => 5,
+            'harga_jual' => 75000,
         ]);
     }
 
@@ -178,6 +180,72 @@ class TransactionFlowTest extends TestCase
             ->assertSee('0,75 kg');
     }
 
+    public function test_cashier_can_create_customer_with_shipping_address_during_checkout(): void
+    {
+        $response = $this->actingAs($this->employee, 'employee')
+            ->post(route('employee.penjualan.cashier.store'), [
+                'pelanggan_baru' => [
+                    'nama_pelanggan' => 'Pelanggan Kasir',
+                    'no_hp' => '08123456789',
+                    'alamat' => 'Jl. Contoh No. 10',
+                ],
+                'tanggal' => today()->toDateString(),
+                'items' => [[
+                    'id_persediaan' => $this->product->id_persediaan,
+                    'jumlah_barang' => 1,
+                    'harga_satuan' => 75000,
+                ]],
+            ]);
+
+        $customer = Pelanggan::query()->where('nama_pelanggan', 'Pelanggan Kasir')->firstOrFail();
+        $response->assertRedirect(route('employee.penjualan.show', Penjualan::query()->firstOrFail()));
+        $this->assertSame('08123456789', $customer->no_hp);
+        $this->assertSame('Jl. Contoh No. 10', $customer->alamat);
+        $this->assertDatabaseHas('penjualan', [
+            'id_pelanggan' => $customer->id_pelanggan,
+        ]);
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pelanggan.index'))
+            ->assertSee('Pelanggan Kasir')
+            ->assertSee('Jl. Contoh No. 10');
+    }
+
+    public function test_sale_requires_customer_details(): void
+    {
+        $response = $this->actingAs($this->employee, 'employee')
+            ->post(route('employee.penjualan.cashier.store'), [
+                'tanggal' => today()->toDateString(),
+                'items' => [[
+                    'id_persediaan' => $this->product->id_persediaan,
+                    'jumlah_barang' => 1,
+                    'harga_satuan' => 75000,
+                ]],
+            ]);
+
+        $response->assertSessionHasErrors('id_pelanggan');
+        $this->assertDatabaseCount('penjualan', 0);
+    }
+
+    public function test_new_cashier_customer_requires_a_shipping_address(): void
+    {
+        $response = $this->actingAs($this->employee, 'employee')
+            ->post(route('employee.penjualan.cashier.store'), [
+                'pelanggan_baru' => [
+                    'nama_pelanggan' => 'Pelanggan Tanpa Alamat',
+                ],
+                'tanggal' => today()->toDateString(),
+                'items' => [[
+                    'id_persediaan' => $this->product->id_persediaan,
+                    'jumlah_barang' => 1,
+                    'harga_satuan' => 75000,
+                ]],
+            ]);
+
+        $response->assertSessionHasErrors('pelanggan_baru.alamat');
+        $this->assertDatabaseCount('pelanggan', 1);
+        $this->assertDatabaseCount('penjualan', 0);
+    }
+
     public function test_sale_rejects_more_than_three_decimal_places(): void
     {
         $response = $this->actingAs($this->employee, 'employee')
@@ -199,7 +267,7 @@ class TransactionFlowTest extends TestCase
         ]);
     }
 
-    public function test_cashier_shows_stocked_products_and_last_selling_price(): void
+    public function test_cashier_shows_inventory_selling_price(): void
     {
         $sale = Penjualan::query()->create([
             'id_penjualan' => 'PJL0001',
@@ -209,7 +277,7 @@ class TransactionFlowTest extends TestCase
         ]);
         $sale->detailPenjualan()->create([
             'id_persediaan' => $this->product->id_persediaan,
-            'harga_satuan' => 75000,
+            'harga_satuan' => 60000,
             'jumlah_barang' => 1,
         ]);
 
@@ -220,8 +288,35 @@ class TransactionFlowTest extends TestCase
             ->assertSee('Semen')
             ->assertSee('Stok: 5 sak')
             ->assertSee('Rp75.000')
+            ->assertDontSee('Rp60.000')
             ->assertSee('Keranjang')
-            ->assertSee('Pilih pelanggan');
+            ->assertDontSee('Pilih pelanggan')
+            ->assertSee('Nama pelanggan')
+            ->assertSee('Alamat pengiriman')
+            ->assertSee('css/cashier.css');
+    }
+
+    public function test_cashier_uses_inventory_price_instead_of_submitted_price(): void
+    {
+        $response = $this->actingAs($this->employee, 'employee')
+            ->post(route('employee.penjualan.cashier.store'), [
+                'pelanggan_baru' => [
+                    'nama_pelanggan' => 'Pelanggan Kasir',
+                    'alamat' => 'Jl. Contoh No. 10',
+                ],
+                'tanggal' => today()->toDateString(),
+                'items' => [[
+                    'id_persediaan' => $this->product->id_persediaan,
+                    'jumlah_barang' => 1,
+                    'harga_satuan' => 100,
+                ]],
+            ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('detail_penjualan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'harga_satuan' => 75000,
+        ]);
     }
 
     public function test_sale_with_insufficient_stock_is_rolled_back(): void
@@ -341,6 +436,7 @@ class TransactionFlowTest extends TestCase
                 'nama_barang' => 'Semen',
                 'kategori_barang' => '',
                 'satuan' => 'kg',
+                'harga_jual' => 75000,
                 'stok' => 5,
             ])
             ->assertSessionHasErrors('satuan');

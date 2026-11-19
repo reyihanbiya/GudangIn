@@ -39,6 +39,7 @@ Route::middleware('auth:employee')->prefix('employee')->name('employee.')->group
     Route::get('/penjualan', [PenjualanController::class, 'index'])->name('penjualan.index');
     Route::get('/penjualan/create', [PenjualanController::class, 'create'])->name('penjualan.create');
     Route::get('/penjualan/riwayat', [PenjualanController::class, 'history'])->name('penjualan.history');
+    Route::post('/penjualan/kasir', [PenjualanController::class, 'cashierStore'])->name('penjualan.cashier.store');
     Route::post('/penjualan', [PenjualanController::class, 'store'])->name('penjualan.store');
     Route::get('/penjualan/{penjualan}', [PenjualanController::class, 'show'])->name('penjualan.show');
     Route::get('/pembelian', [PembelianController::class, 'index'])->name('pembelian.index');

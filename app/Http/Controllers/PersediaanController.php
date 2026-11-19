@@ -59,7 +59,7 @@ class PersediaanController extends Controller
 
         return view('masters.index', [
             'title' => 'Persediaan',
-            'description' => 'Kelola barang, satuan ukur, dan jumlah stok yang tersedia.',
+            'description' => 'Kelola barang, harga jual, satuan ukur, dan stok yang tersedia.',
             'createRoute' => 'employee.persediaan.create',
             'editRoute' => 'employee.persediaan.edit',
             'deleteRoute' => 'employee.persediaan.destroy',
@@ -68,6 +68,7 @@ class PersediaanController extends Controller
                 ['label' => 'ID', 'field' => 'id_persediaan'],
                 ['label' => 'Nama barang', 'field' => 'nama_barang'],
                 ['label' => 'Kategori', 'field' => 'kategori_barang'],
+                ['label' => 'Harga jual', 'field' => 'harga_jual_format'],
                 ['label' => 'Stok', 'field' => 'stok_dengan_satuan'],
             ],
             'rows' => $inventory,
@@ -174,9 +175,10 @@ class PersediaanController extends Controller
                     'customOption' => true,
                     'help' => 'Stok, pembelian, dan penjualan barang ini akan selalu memakai satuan ini.',
                 ],
+                ['name' => 'harga_jual', 'label' => 'Harga jual', 'type' => 'number', 'required' => true, 'min' => 0.01, 'max' => 9999999999999.99, 'step' => '0.01'],
                 ['name' => 'stok', 'label' => 'Stok awal', 'type' => 'number', 'required' => true, 'min' => 0, 'step' => '0.001'],
             ],
-            'values' => $persediaan?->only(['nama_barang', 'kategori_barang', 'satuan', 'stok']) ?? ['satuan' => 'pcs', 'stok' => 0],
+            'values' => $persediaan?->only(['nama_barang', 'kategori_barang', 'satuan', 'harga_jual', 'stok']) ?? ['satuan' => 'pcs', 'harga_jual' => '', 'stok' => 0],
             'formAction' => $persediaan
                 ? route('employee.persediaan.update', $persediaan)
                 : route('employee.persediaan.store'),
@@ -193,6 +195,7 @@ class PersediaanController extends Controller
             'kategori_barang' => ['nullable', 'string', 'max:50'],
             'satuan' => ['required', 'string', Rule::in([...array_keys(self::INVENTORY_UNITS), self::CUSTOM_UNIT])],
             'satuan_custom' => ['nullable', 'required_if:satuan,'.self::CUSTOM_UNIT, 'string', 'max:20'],
+            'harga_jual' => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:9999999999999.99'],
             'stok' => ['required', 'numeric', 'decimal:0,3', 'min:0', 'max:999999999999.999'],
         ]);
 

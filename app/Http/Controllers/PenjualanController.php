@@ -19,24 +19,13 @@ class PenjualanController extends Controller
 {
     public function index(): View
     {
-        $lastSalePrice = DetailPenjualan::query()
-            ->join('penjualan', 'penjualan.id_penjualan', '=', 'detail_penjualan.id_penjualan')
-            ->whereColumn('detail_penjualan.id_persediaan', 'persediaan.id_persediaan')
-            ->orderByDesc('penjualan.tanggal')
-            ->orderByDesc('detail_penjualan.id_detail')
-            ->select('detail_penjualan.harga_satuan')
-            ->limit(1);
-
         $products = Persediaan::query()
             ->where('stok', '>', 0)
-            ->select(['id_persediaan', 'nama_barang', 'kategori_barang', 'satuan', 'stok'])
-            ->selectSub($lastSalePrice, 'harga_jual')
+            ->select(['id_persediaan', 'nama_barang', 'kategori_barang', 'satuan', 'stok', 'harga_jual'])
             ->orderBy('nama_barang')
             ->get();
 
-        $customers = Pelanggan::query()->orderBy('nama_pelanggan')->get();
-
-        return view('transactions.cashier', compact('products', 'customers'));
+        return view('transactions.cashier', compact('products'));
     }
 
     public function history(): View
@@ -65,16 +54,38 @@ class PenjualanController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        return $this->saveTransaction($request, false);
+    }
+
+    public function cashierStore(Request $request): RedirectResponse
+    {
+        return $this->saveTransaction($request, true);
+    }
+
+    private function saveTransaction(Request $request, bool $cashierCheckout): RedirectResponse
+    {
         $data = $this->validateTransaction($request, 'harga_satuan');
         $employee = Auth::guard('employee')->user();
 
-        $transaction = DB::transaction(function () use ($data, $employee): Penjualan {
+        $transaction = DB::transaction(function () use ($data, $employee, $cashierCheckout): Penjualan {
+            $customerId = $data['id_pelanggan'] ?? null;
+
+            if (filled($data['pelanggan_baru']['nama_pelanggan'] ?? null)) {
+                $customer = Pelanggan::query()->create([
+                    'id_pelanggan' => CodeGeneratorService::generate('pelanggan'),
+                    'nama_pelanggan' => $data['pelanggan_baru']['nama_pelanggan'],
+                    'no_hp' => $data['pelanggan_baru']['no_hp'] ?? null,
+                    'alamat' => $data['pelanggan_baru']['alamat'] ?? null,
+                ]);
+                $customerId = $customer->id_pelanggan;
+            }
+
             $transaction = Penjualan::query()->create([
                 'id_penjualan' => CodeGeneratorService::generate(
                     'penjualan',
                     \Illuminate\Support\Carbon::parse($data['tanggal'])->format('ym')
                 ),
-                'id_pelanggan' => $data['id_pelanggan'],
+                'id_pelanggan' => $customerId,
                 'id_pegawai' => $employee->id_pegawai,
                 'tanggal' => $data['tanggal'],
             ]);
@@ -91,11 +102,19 @@ class PenjualanController extends Controller
                     ]);
                 }
 
+                $unitPrice = $cashierCheckout ? $inventory->harga_jual : $item['harga_satuan'];
+
+                if ($unitPrice === null || (float) $unitPrice <= 0) {
+                    throw ValidationException::withMessages([
+                        'items' => "Harga jual {$inventory->nama_barang} belum diatur di data persediaan.",
+                    ]);
+                }
+
                 DetailPenjualan::query()->create([
                     'id_penjualan' => $transaction->id_penjualan,
                     'id_persediaan' => $inventory->id_persediaan,
                     'satuan' => $inventory->satuan,
-                    'harga_satuan' => $item['harga_satuan'],
+                    'harga_satuan' => $unitPrice,
                     'jumlah_barang' => $item['jumlah_barang'],
                 ]);
 
@@ -132,13 +151,28 @@ class PenjualanController extends Controller
     private function validateTransaction(Request $request, string $priceField): array
     {
         $validator = Validator::make($request->all(), [
-            'id_pelanggan' => ['required', 'string', 'exists:pelanggan,id_pelanggan'],
+            'id_pelanggan' => ['nullable', 'string', 'exists:pelanggan,id_pelanggan'],
+            'pelanggan_baru.nama_pelanggan' => ['nullable', 'string', 'max:100'],
+            'pelanggan_baru.no_hp' => ['nullable', 'string', 'max:20'],
+            'pelanggan_baru.alamat' => ['required_with:pelanggan_baru.nama_pelanggan', 'nullable', 'string', 'max:255'],
             'tanggal' => ['required', 'date'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.id_persediaan' => ['nullable', 'string', 'exists:persediaan,id_persediaan'],
             'items.*.jumlah_barang' => ['nullable', 'numeric', 'decimal:0,3', 'min:0.001', 'max:999999999999.999'],
             "items.*.{$priceField}" => ['nullable', 'numeric', 'min:0.01', 'max:9999999999999.99'],
         ]);
+
+        $validator->after(function ($validator) use ($request): void {
+            $hasExistingCustomer = filled($request->input('id_pelanggan'));
+            $hasNewCustomerName = filled($request->input('pelanggan_baru.nama_pelanggan'));
+
+            if ($hasExistingCustomer === $hasNewCustomerName) {
+                $validator->errors()->add(
+                    'id_pelanggan',
+                    'Pilih pelanggan yang sudah ada atau isi nama pelanggan baru.'
+                );
+            }
+        });
 
         $this->validateCompleteLines($validator, $request, $priceField);
 
