@@ -30,7 +30,17 @@
                         <a class="{{ request()->routeIs('employee.pembelian.*') ? 'active' : '' }}" href="{{ route('employee.pembelian.index') }}"><span aria-hidden="true">↙</span>Pembelian</a>
                         <a class="{{ request()->routeIs('employee.penjualan.history', 'employee.penjualan.show') ? 'active' : '' }}" href="{{ route('employee.penjualan.history') }}"><span aria-hidden="true">▤</span>Riwayat transaksi</a>
                         <a class="{{ request()->routeIs('employee.penjualan.index', 'employee.penjualan.create') ? 'active' : '' }}" href="{{ route('employee.penjualan.index') }}" @if ($isCashier) aria-current="page" @endif><span aria-hidden="true">▣</span>Kasir</a>
-                        <a class="{{ request()->routeIs('employee.pelanggan.*') ? 'active' : '' }}" href="{{ route('employee.pelanggan.index') }}"><span aria-hidden="true">♙</span>Pengiriman</a>
+                        <a class="{{ request()->routeIs('employee.pelanggan.*') ? 'active' : '' }}" href="{{ route('employee.pelanggan.index') }}"><span aria-hidden="true">♙</span>Pelanggan</a>
+                        <a class="{{ request()->routeIs('employee.pengiriman.*') ? 'active' : '' }}" href="{{ route('employee.pengiriman.index') }}">
+                            <span aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 6h11v11H3zM14 10h4l3 4v3h-7" />
+                                    <circle cx="7.5" cy="18.5" r="1.5" />
+                                    <circle cx="17.5" cy="18.5" r="1.5" />
+                                </svg>
+                            </span>
+                            Pengiriman
+                        </a>
                         <a class="{{ request()->routeIs('employee.supplier.*') ? 'active' : '' }}" href="{{ route('employee.supplier.index') }}"><span aria-hidden="true">⚒</span>Supplier</a>
                     @else
                         <a class="{{ request()->routeIs('owner.dashboard') ? 'active' : '' }}" href="{{ route('owner.dashboard') }}"><span aria-hidden="true">⌂</span>Ringkasan</a>

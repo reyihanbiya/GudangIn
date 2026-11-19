@@ -1,14 +1,17 @@
 @extends('layouts.app')
 
-@section('title', 'Buat '.$type.' | GudangIn')
+@section('title', (isset($transaction) ? 'Ubah penjualan' : 'Buat '.$type).' | GudangIn')
 
 @php
+    $transaction = $transaction ?? null;
+    $isEditing = $transaction !== null;
     $partyField = $type === 'Penjualan' ? 'id_pelanggan' : 'id_supplier';
     $partyLabel = $type === 'Penjualan' ? 'Pelanggan' : 'Supplier';
     $partyName = $type === 'Penjualan' ? 'nama_pelanggan' : 'nama_supplier';
     $priceField = $type === 'Penjualan' ? 'harga_satuan' : 'harga_beli';
     $priceLabel = $type === 'Penjualan' ? 'Harga jual satuan' : 'Harga beli satuan';
-    $oldItems = old('items', [[
+    $selectedPartyId = old($partyField, $transaction?->id_pelanggan);
+    $oldItems = old('items', $transactionItems ?? [[
         'id_persediaan' => '',
         'jumlah_barang' => '',
         $priceField => '',
@@ -19,8 +22,15 @@
     <section class="page-heading">
         <div>
             <p class="eyebrow">Transaksi</p>
-            <h1>Buat {{ strtolower($type) }}</h1>
-            <p class="lead">Isi rincian dengan benar. Stok akan diperbarui saat transaksi disimpan sesuai statusnya.</p>
+            <h1>{{ $isEditing ? 'Ubah penjualan' : 'Buat '.strtolower($type) }}</h1>
+            <p class="lead">
+                @if ($isEditing)
+                    Transaksi {{ $transaction->id_penjualan }} · ID Pengiriman {{ $transaction->id_pengiriman }}.
+                    Stok akan dihitung ulang saat perubahan disimpan.
+                @else
+                    Isi rincian dengan benar. Stok akan diperbarui saat transaksi disimpan sesuai statusnya.
+                @endif
+            </p>
         </div>
     </section>
 
@@ -30,13 +40,16 @@
         @endif
         <form method="POST" action="{{ $action }}" class="stack-form">
             @csrf
+            @if ($isEditing)
+                @method('PUT')
+            @endif
             <div class="transaction-meta">
                 <div>
                     <label for="{{ $partyField }}">{{ $partyLabel }}</label>
                     <select id="{{ $partyField }}" name="{{ $partyField }}" required>
                         <option value="">Pilih {{ strtolower($partyLabel) }}</option>
                         @foreach ($counterparts as $counterpart)
-                            <option value="{{ $counterpart->getKey() }}" @selected(old($partyField) === $counterpart->getKey())>
+                            <option value="{{ $counterpart->getKey() }}" @selected((string) $selectedPartyId === (string) $counterpart->getKey())>
                                 {{ $counterpart->{$partyName} }}
                             </option>
                         @endforeach
@@ -44,7 +57,7 @@
                 </div>
                 <div>
                     <label for="tanggal">Tanggal</label>
-                    <input id="tanggal" name="tanggal" type="date" value="{{ old('tanggal', $date) }}" required>
+                    <input id="tanggal" name="tanggal" type="date" value="{{ old('tanggal', $transaction?->tanggal ?? $date) }}" required>
                 </div>
                 @if ($showStatus)
                     <div>
@@ -85,7 +98,7 @@
                                     <option
                                         value="{{ $product->id_persediaan }}"
                                         @selected(($oldItem['id_persediaan'] ?? '') === $product->id_persediaan)
-                                        @disabled($type === 'Penjualan' && $product->stok <= 0)
+                                        @disabled($type === 'Penjualan' && $product->stok <= 0 && ! $isEditing)
                                     >
                                         {{ $product->nama_barang }} (stok: {{ \App\Support\QuantityFormatter::format($product->stok) }} {{ $product->satuan }})
                                     </option>
@@ -112,7 +125,7 @@
                         <select id="item-__INDEX__-product" name="items[__INDEX__][id_persediaan]">
                             <option value="">Pilih barang</option>
                             @foreach ($products as $product)
-                                @if ($type !== 'Penjualan' || $product->stok > 0)
+                                    @if ($type !== 'Penjualan' || $product->stok > 0 || $isEditing)
                                     <option value="{{ $product->id_persediaan }}">{{ $product->nama_barang }} (stok: {{ \App\Support\QuantityFormatter::format($product->stok) }} {{ $product->satuan }})</option>
                                 @endif
                             @endforeach
@@ -131,8 +144,8 @@
             </template>
 
             <div class="form-actions">
-                <a class="button button-secondary" href="{{ route($type === 'Penjualan' ? 'employee.penjualan.index' : 'employee.pembelian.index') }}">Batal</a>
-                <button class="button button-primary" type="submit">Simpan {{ strtolower($type) }}</button>
+                <a class="button button-secondary" href="{{ $isEditing ? route('employee.pengiriman.index') : route($type === 'Penjualan' ? 'employee.penjualan.index' : 'employee.pembelian.index') }}">Batal</a>
+                <button class="button button-primary" type="submit">{{ $isEditing ? 'Simpan perubahan' : 'Simpan '.strtolower($type) }}</button>
             </div>
         </form>
         @if (isset($receiptToken))

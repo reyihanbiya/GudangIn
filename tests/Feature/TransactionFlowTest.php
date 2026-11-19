@@ -61,6 +61,7 @@ class TransactionFlowTest extends TestCase
 
         Schema::create('penjualan', function (Blueprint $table): void {
             $table->string('id_penjualan', 10)->primary();
+            $table->string('id_pengiriman', 10)->nullable()->unique();
             $table->string('id_pelanggan', 10);
             $table->string('id_pegawai', 10);
             $table->date('tanggal');
@@ -147,6 +148,65 @@ class TransactionFlowTest extends TestCase
             ->assertSee('2 sak');
     }
 
+    public function test_each_sale_gets_a_unique_shipping_id_and_appears_in_shipping_list(): void
+    {
+        foreach ([1, 2] as $quantity) {
+            $this->actingAs($this->employee, 'employee')
+                ->post(route('employee.penjualan.store'), [
+                    'id_pelanggan' => $this->customer->id_pelanggan,
+                    'tanggal' => today()->toDateString(),
+                    'items' => [[
+                        'id_persediaan' => $this->product->id_persediaan,
+                        'jumlah_barang' => $quantity,
+                        'harga_satuan' => 75000,
+                    ]],
+                ])
+                ->assertRedirect();
+        }
+
+        $transactions = Penjualan::query()->orderBy('id_penjualan')->get();
+        $shippingIds = $transactions->pluck('id_pengiriman');
+
+        $this->assertCount(2, $shippingIds->unique());
+        $this->assertStringStartsWith('PNG', $shippingIds[0]);
+        $this->assertStringStartsWith('PNG', $shippingIds[1]);
+
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pengiriman.index'))
+            ->assertOk()
+            ->assertSee($shippingIds[0])
+            ->assertSee($shippingIds[1])
+            ->assertSee('action-print', false)
+            ->assertSee('action-edit', false)
+            ->assertSee('action-delete', false)
+            ->assertSee('M3 6h11v11H3z', false)
+            ->assertSee('aria-label="Hapus transaksi"', false);
+
+        $response = $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pengiriman.pdf', $transactions[0]));
+
+        $response->assertOk();
+        $this->assertStringContainsString('application/pdf', $response->headers->get('content-type'));
+    }
+
+    public function test_migration_assigns_shipping_ids_to_existing_sales(): void
+    {
+        Penjualan::query()->create([
+            'id_penjualan' => 'PJ260001',
+            'id_pelanggan' => $this->customer->id_pelanggan,
+            'id_pegawai' => $this->employee->id_pegawai,
+            'tanggal' => today()->toDateString(),
+        ]);
+
+        $migration = require database_path('migrations/2026_11_20_000000_add_id_pengiriman_to_penjualan_table.php');
+        $migration->up();
+
+        $this->assertDatabaseHas('penjualan', [
+            'id_penjualan' => 'PJ260001',
+            'id_pengiriman' => 'PNG0001',
+        ]);
+    }
+
     public function test_sale_accepts_fractional_quantities_in_inventory_unit(): void
     {
         $this->product->update(['satuan' => 'kg', 'stok' => 2.5]);
@@ -197,6 +257,160 @@ class TransactionFlowTest extends TestCase
             'id_persediaan' => $this->product->id_persediaan,
             'stok' => 5,
         ]);
+    }
+
+    public function test_employee_can_download_customer_shipping_pdf_with_a_sale(): void
+    {
+        $penjualan = Penjualan::query()->create([
+            'id_penjualan' => 'PJL260001',
+            'id_pelanggan' => $this->customer->id_pelanggan,
+            'id_pegawai' => $this->employee->id_pegawai,
+            'tanggal' => today()->toDateString(),
+        ]);
+        \App\Models\DetailPenjualan::query()->create([
+            'id_penjualan' => $penjualan->id_penjualan,
+            'id_persediaan' => $this->product->id_persediaan,
+            'satuan' => $this->product->satuan,
+            'harga_satuan' => 75000,
+            'jumlah_barang' => 2,
+        ]);
+
+        $response = $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pelanggan.pdf', $this->customer));
+
+        $response->assertOk();
+        $this->assertStringContainsString('application/pdf', $response->headers->get('content-type'));
+    }
+
+    public function test_employee_can_edit_shipment_and_recalculate_stock(): void
+    {
+        $this->actingAs($this->employee, 'employee')
+            ->post(route('employee.penjualan.store'), [
+                'id_pelanggan' => $this->customer->id_pelanggan,
+                'tanggal' => today()->toDateString(),
+                'items' => [[
+                    'id_persediaan' => $this->product->id_persediaan,
+                    'jumlah_barang' => 2,
+                    'harga_satuan' => 75000,
+                ]],
+            ])
+            ->assertRedirect();
+
+        $transaction = Penjualan::query()->firstOrFail();
+
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pengiriman.edit', $transaction))
+            ->assertOk()
+            ->assertSee('Ubah penjualan')
+            ->assertSee($transaction->id_pengiriman);
+
+        $this->actingAs($this->employee, 'employee')
+            ->put(route('employee.pengiriman.update', $transaction), [
+                'id_pelanggan' => $this->customer->id_pelanggan,
+                'tanggal' => today()->toDateString(),
+                'items' => [[
+                    'id_persediaan' => $this->product->id_persediaan,
+                    'jumlah_barang' => 3,
+                    'harga_satuan' => 80000,
+                ]],
+            ])
+            ->assertRedirect(route('employee.pengiriman.index'))
+            ->assertSessionHas('status');
+
+        $this->assertDatabaseHas('detail_penjualan', [
+            'id_penjualan' => $transaction->id_penjualan,
+            'jumlah_barang' => 3,
+            'harga_satuan' => 80000,
+        ]);
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 2,
+        ]);
+        $this->assertDatabaseHas('penjualan', [
+            'id_penjualan' => $transaction->id_penjualan,
+            'id_pengiriman' => $transaction->id_pengiriman,
+        ]);
+    }
+
+    public function test_failed_shipment_edit_keeps_original_details_and_stock(): void
+    {
+        $this->actingAs($this->employee, 'employee')
+            ->post(route('employee.penjualan.store'), [
+                'id_pelanggan' => $this->customer->id_pelanggan,
+                'tanggal' => today()->toDateString(),
+                'items' => [[
+                    'id_persediaan' => $this->product->id_persediaan,
+                    'jumlah_barang' => 2,
+                    'harga_satuan' => 75000,
+                ]],
+            ])
+            ->assertRedirect();
+
+        $transaction = Penjualan::query()->firstOrFail();
+
+        $this->actingAs($this->employee, 'employee')
+            ->put(route('employee.pengiriman.update', $transaction), [
+                'id_pelanggan' => $this->customer->id_pelanggan,
+                'tanggal' => today()->toDateString(),
+                'items' => [[
+                    'id_persediaan' => $this->product->id_persediaan,
+                    'jumlah_barang' => 6,
+                    'harga_satuan' => 80000,
+                ]],
+            ])
+            ->assertSessionHasErrors('items');
+
+        $this->assertDatabaseHas('detail_penjualan', [
+            'id_penjualan' => $transaction->id_penjualan,
+            'jumlah_barang' => 2,
+            'harga_satuan' => 75000,
+        ]);
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 3,
+        ]);
+    }
+
+    public function test_employee_can_delete_shipment_and_restore_stock(): void
+    {
+        $this->actingAs($this->employee, 'employee')
+            ->post(route('employee.penjualan.store'), [
+                'id_pelanggan' => $this->customer->id_pelanggan,
+                'tanggal' => today()->toDateString(),
+                'items' => [[
+                    'id_persediaan' => $this->product->id_persediaan,
+                    'jumlah_barang' => 2,
+                    'harga_satuan' => 75000,
+                ]],
+            ])
+            ->assertRedirect();
+
+        $transaction = Penjualan::query()->firstOrFail();
+
+        $this->actingAs($this->employee, 'employee')
+            ->delete(route('employee.pengiriman.destroy', $transaction))
+            ->assertRedirect(route('employee.pengiriman.index'))
+            ->assertSessionHas('status');
+
+        $this->assertDatabaseMissing('penjualan', [
+            'id_penjualan' => $transaction->id_penjualan,
+        ]);
+        $this->assertDatabaseMissing('detail_penjualan', [
+            'id_penjualan' => $transaction->id_penjualan,
+        ]);
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 5,
+        ]);
+    }
+
+    public function test_employee_can_download_customer_shipping_pdf_without_sales(): void
+    {
+        $response = $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pelanggan.pdf', $this->customer));
+
+        $response->assertOk();
+        $this->assertStringContainsString('application/pdf', $response->headers->get('content-type'));
     }
 
     public function test_cashier_shows_stocked_products_and_last_selling_price(): void

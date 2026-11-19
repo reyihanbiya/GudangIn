@@ -63,6 +63,27 @@ class PenjualanController extends Controller
         ]);
     }
 
+    public function edit(Penjualan $penjualan): View
+    {
+        $penjualan->load('detailPenjualan');
+
+        return view('transactions.form', [
+            'type' => 'Penjualan',
+            'action' => route('employee.pengiriman.update', $penjualan),
+            'method' => 'PUT',
+            'transaction' => $penjualan,
+            'transactionItems' => $penjualan->detailPenjualan->map(fn (DetailPenjualan $detail): array => [
+                'id_persediaan' => $detail->id_persediaan,
+                'jumlah_barang' => $detail->jumlah_barang,
+                'harga_satuan' => $detail->harga_satuan,
+            ])->all(),
+            'counterparts' => Pelanggan::query()->orderBy('nama_pelanggan')->get(),
+            'products' => Persediaan::query()->orderBy('nama_barang')->get(),
+            'date' => today()->toDateString(),
+            'showStatus' => false,
+        ]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $data = $this->validateTransaction($request, 'harga_satuan');
@@ -74,33 +95,13 @@ class PenjualanController extends Controller
                     'penjualan',
                     \Illuminate\Support\Carbon::parse($data['tanggal'])->format('ym')
                 ),
+                'id_pengiriman' => CodeGeneratorService::generate('pengiriman'),
                 'id_pelanggan' => $data['id_pelanggan'],
                 'id_pegawai' => $employee->id_pegawai,
                 'tanggal' => $data['tanggal'],
             ]);
 
-            foreach ($data['items'] as $item) {
-                $inventory = Persediaan::query()
-                    ->where('id_persediaan', $item['id_persediaan'])
-                    ->lockForUpdate()
-                    ->firstOrFail();
-
-                if ($inventory->stok < $item['jumlah_barang']) {
-                    throw ValidationException::withMessages([
-                        'items' => "Stok {$inventory->nama_barang} tidak mencukupi. Tersedia {$inventory->stok_dengan_satuan}.",
-                    ]);
-                }
-
-                DetailPenjualan::query()->create([
-                    'id_penjualan' => $transaction->id_penjualan,
-                    'id_persediaan' => $inventory->id_persediaan,
-                    'satuan' => $inventory->satuan,
-                    'harga_satuan' => $item['harga_satuan'],
-                    'jumlah_barang' => $item['jumlah_barang'],
-                ]);
-
-                $inventory->decrement('stok', $item['jumlah_barang']);
-            }
+            $this->createSaleDetails($transaction, $data['items']);
 
             return $transaction;
         });
@@ -108,6 +109,47 @@ class PenjualanController extends Controller
         return redirect()
             ->route('employee.penjualan.show', $transaction)
             ->with('status', 'Transaksi penjualan berhasil disimpan.');
+    }
+
+    public function update(Request $request, Penjualan $penjualan): RedirectResponse
+    {
+        $data = $this->validateTransaction($request, 'harga_satuan');
+
+        DB::transaction(function () use ($data, $penjualan): void {
+            $transaction = Penjualan::query()
+                ->whereKey($penjualan->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $this->restoreInventory($transaction);
+            $transaction->detailPenjualan()->delete();
+            $transaction->update([
+                'id_pelanggan' => $data['id_pelanggan'],
+                'tanggal' => $data['tanggal'],
+            ]);
+
+            $this->createSaleDetails($transaction, $data['items']);
+        });
+
+        return redirect()->route('employee.pengiriman.index')
+            ->with('status', 'Transaksi berhasil diperbarui dan stok disesuaikan.');
+    }
+
+    public function destroy(Penjualan $penjualan): RedirectResponse
+    {
+        DB::transaction(function () use ($penjualan): void {
+            $transaction = Penjualan::query()
+                ->whereKey($penjualan->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $this->restoreInventory($transaction);
+            $transaction->detailPenjualan()->delete();
+            $transaction->delete();
+        });
+
+        return redirect()->route('employee.pengiriman.index')
+            ->with('status', 'Transaksi dihapus dan stok barang dikembalikan.');
     }
 
     public function show(Penjualan $penjualan): View
@@ -127,6 +169,48 @@ class PenjualanController extends Controller
             'total' => $penjualan->detailPenjualan->sum('subtotal'),
             'backRoute' => route('employee.penjualan.index'),
         ]);
+    }
+
+    private function createSaleDetails(Penjualan $transaction, array $items): void
+    {
+        foreach ($items as $item) {
+            $inventory = Persediaan::query()
+                ->where('id_persediaan', $item['id_persediaan'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($inventory->stok < $item['jumlah_barang']) {
+                throw ValidationException::withMessages([
+                    'items' => "Stok {$inventory->nama_barang} tidak mencukupi. Tersedia {$inventory->stok_dengan_satuan}.",
+                ]);
+            }
+
+            DetailPenjualan::query()->create([
+                'id_penjualan' => $transaction->id_penjualan,
+                'id_persediaan' => $inventory->id_persediaan,
+                'satuan' => $inventory->satuan,
+                'harga_satuan' => $item['harga_satuan'],
+                'jumlah_barang' => $item['jumlah_barang'],
+            ]);
+
+            $inventory->decrement('stok', $item['jumlah_barang']);
+        }
+    }
+
+    private function restoreInventory(Penjualan $transaction): void
+    {
+        $details = $transaction->detailPenjualan()
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($details as $detail) {
+            $inventory = Persediaan::query()
+                ->where('id_persediaan', $detail->id_persediaan)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $inventory->increment('stok', $detail->jumlah_barang);
+        }
     }
 
     private function validateTransaction(Request $request, string $priceField): array

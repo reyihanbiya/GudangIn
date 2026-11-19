@@ -60,11 +60,14 @@ class MasterDataTest extends TestCase
             ->get(route('employee.pelanggan.index'))
             ->assertOk()
             ->assertSee('app-layout')
-            ->assertSee('Pengiriman')
+            ->assertSee('Pelanggan')
             ->assertSee('Menu utama')
             ->assertSee('Nama pelanggan')
             ->assertSee('No. telepon')
             ->assertSee('Alamat')
+            ->assertSee('action-print', false)
+            ->assertSee('action-edit', false)
+            ->assertSee('action-delete', false)
             ->assertDontSee('<th>ID</th>', false);
     }
 

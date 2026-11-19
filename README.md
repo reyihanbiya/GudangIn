@@ -38,6 +38,7 @@ Biarkan terminal tetap terbuka selama aplikasi digunakan. Halaman penyiapan hany
 - Login terpisah untuk Pegawai dan Owner; penyiapan awal dapat membuat beberapa akun untuk kedua peran sekaligus.
 - Dashboard ringkasan untuk kedua peran.
 - Pengelolaan pelanggan, supplier, dan persediaan.
+- ID pengiriman unik untuk setiap transaksi penjualan; daftar Pengiriman menyediakan surat jalan per transaksi.
 - Satuan stok per barang (mis. sak, kg, meter, atau liter) dengan jumlah hingga tiga angka desimal.
 - Pencarian dan pagination pada daftar data.
 - Kartu stok untuk melihat transaksi barang masuk dan keluar.

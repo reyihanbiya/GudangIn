@@ -16,6 +16,7 @@ class Penjualan extends Model
 
     protected $fillable = [
         'id_penjualan',
+        'id_pengiriman',
         'id_pelanggan',
         'id_pegawai',
         'tanggal',

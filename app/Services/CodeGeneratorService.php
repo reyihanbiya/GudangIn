@@ -13,7 +13,7 @@ class CodeGeneratorService
     /**
      * Menghasilkan ID unik terurut untuk entitas tertentu.
      * 
-     * @param string $entityType Jenis entitas (penjualan, pembelian, pegawai, owner, pelanggan, supplier, persediaan)
+     * @param string $entityType Jenis entitas (penjualan, pembelian, pengiriman, pegawai, owner, pelanggan, supplier, persediaan)
      * @param string|null $customPeriod Periode transaksi format YYMM (opsional, default: bulan berjalan date('ym'))
      * @return string ID terformat maksimal 10 karakter
      * @throws InvalidArgumentException Jika entitas tidak dikenal atau periode YYMM tidak valid
@@ -163,6 +163,13 @@ class CodeGeneratorService
                 'id_column'    => 'id_pembelian',
                 'prefix'       => 'PB' . $period,
                 'sequence_key' => 'pembelian_' . $period,
+                'digit_length' => 4,
+            ],
+            'pengiriman' => [
+                'table'        => 'penjualan',
+                'id_column'    => 'id_pengiriman',
+                'prefix'       => 'PNG',
+                'sequence_key' => 'pengiriman',
                 'digit_length' => 4,
             ],
             'pegawai' => [
