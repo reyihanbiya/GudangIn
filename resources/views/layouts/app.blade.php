@@ -37,6 +37,7 @@
                         <a class="{{ request()->routeIs('employee.supplier.*') ? 'active' : '' }}" href="{{ route('employee.supplier.index') }}"><span aria-hidden="true">⚒</span>Supplier</a>
                     @else
                         <a class="{{ request()->routeIs('owner.dashboard') ? 'active' : '' }}" href="{{ route('owner.dashboard') }}"><span aria-hidden="true">⌂</span>Ringkasan</a>
+                        <a class="{{ request()->routeIs('owner.accounts.*') ? 'active' : '' }}" href="{{ route('owner.accounts.index') }}"><span aria-hidden="true">♙</span>Akun Owner</a>
                         <a class="{{ request()->routeIs('owner.reports.sales') ? 'active' : '' }}" href="{{ route('owner.reports.sales') }}"><span aria-hidden="true">▤</span>Laporan penjualan</a>
                         <a class="{{ request()->routeIs('owner.reports.purchases') ? 'active' : '' }}" href="{{ route('owner.reports.purchases') }}"><span aria-hidden="true">↙</span>Laporan pembelian</a>
                     @endif

@@ -26,6 +26,14 @@
                 <label class="checkbox-row"><input type="checkbox" name="remember" value="1"> Ingat saya di perangkat ini</label>
                 <button class="button button-primary button-wide" type="submit">Masuk</button>
             </form>
+            <p class="setup-hint">Belum punya akun? <a href="{{ route('register') }}">Buat akun baru</a></p>
+            @if ($role === 'Owner')
+                @if ($ownerAccountExists)
+                    <p class="setup-hint">Akun Owner tambahan dibuat oleh Owner yang sudah masuk.</p>
+                @else
+                    <p class="setup-hint">Belum ada Owner? Buat akun Owner pertama lewat pilihan akun baru.</p>
+                @endif
+            @endif
             <a class="text-link back-link" href="{{ $portalRoute }}">Kembali ke pilihan akses</a>
         </div>
     </section>

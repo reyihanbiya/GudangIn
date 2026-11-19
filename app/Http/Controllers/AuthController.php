@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Owner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -32,6 +33,7 @@ class AuthController extends Controller
             'role' => 'Owner',
             'action' => route('owner.login.store'),
             'portalRoute' => route('home'),
+            'ownerAccountExists' => Owner::query()->exists(),
         ]);
     }
 
