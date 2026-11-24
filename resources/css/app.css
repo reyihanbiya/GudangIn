@@ -133,7 +133,16 @@ td { color: #514337; }
 .actions-heading { min-width: 180px; }
 .row-actions { display: flex; align-items: center; gap: 13px; white-space: nowrap; }
 .row-actions form { margin: 0; }
+<<<<<<< HEAD
 .transaction-action-button { min-height: 32px; padding: 0 10px; font-size: 11px; }
+=======
+.purchase-detail-actions {
+    position: fixed;
+    right: 24px;
+    bottom: 68px;
+    z-index: 20;
+}
+>>>>>>> origin/main
 .text-button { padding: 0; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .text-danger { color: #a13d31; }
 .empty-cell { padding: 38px 16px; color: #82766b; text-align: center; }
@@ -162,6 +171,9 @@ td { color: #514337; }
 .transaction-lines { display: flex; flex-direction: column; gap: 12px; }
 .transaction-line { display: grid; grid-template-columns: minmax(200px, 1.7fr) minmax(90px, .7fr) minmax(150px, 1fr) auto; align-items: end; gap: 12px; padding: 14px; border: 1px solid #eee4dc; border-radius: 10px; }
 .transaction-line > div { display: flex; flex-direction: column; gap: 8px; }
+.quantity-input-wrap { position: relative; }
+.quantity-input-wrap input { padding-right: 58px !important; }
+.quantity-unit { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #82766b; font-size: 12px; font-weight: 700; pointer-events: none; }
 .remove-line { padding: 0 4px 12px; }
 .status-badge { padding: 5px 8px; border-radius: 99px; color: #764c2d; background: #efe1d6; font-size: 11px; font-weight: 750; white-space: nowrap; }
 .transaction-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
