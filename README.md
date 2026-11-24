@@ -14,7 +14,7 @@ GudangIn adalah aplikasi web POS dan persediaan untuk toko bangunan, dibuat deng
    npm install
    ```
 
-5. Jalankan migrasi untuk membuat tabel pendukung Laravel dan sequence ID:
+5. Jalankan migrasi untuk membuat tabel pendukung Laravel, sequence ID, dan pembayaran Xendit:
 
    ```powershell
    php artisan migrate
@@ -22,14 +22,16 @@ GudangIn adalah aplikasi web POS dan persediaan untuk toko bangunan, dibuat deng
 
    Barang lama mendapat satuan sementara `unit`; sesuaikan satuannya melalui menu **Persediaan** sebelum melanjutkan input transaksi.
 
-6. Jalankan aplikasi dan aset frontend:
+6. Checkout berjalan dalam **mode simulasi** secara default (`XENDIT_SIMULATION=true`): QR hanya contoh, tidak ada permintaan atau pembayaran sungguhan ke Xendit, dan transaksi baru dicatat setelah tombol **Bayar (Simulasi)** ditekan. Untuk mengaktifkan integrasi Xendit sungguhan secara eksplisit, ubah flag menjadi `XENDIT_SIMULATION=false`, isi `XENDIT_SECRET_KEY` dan `XENDIT_WEBHOOK_TOKEN`, lalu daftarkan URL webhook `https://alamat-aplikasi/api/xendit/webhook` pada dashboard Xendit untuk event `payment.capture`, `payment.failure`, dan `payment_request.expiry`. Gunakan secret key test saat pengembangan.
+
+7. Jalankan aplikasi dan aset frontend:
 
    ```powershell
    composer run dev
    ```
 
    Script ini menjalankan Laravel, worker antrean, dan Vite. Pail tidak dijalankan karena membutuhkan ekstensi `pcntl` yang tidak tersedia pada Windows.
-7. Buka [http://127.0.0.1:8000](http://127.0.0.1:8000). Pada penggunaan pertama, halaman akan meminta pembuatan satu atau lebih akun Owner dan Pegawai.
+8. Buka [http://127.0.0.1:8000](http://127.0.0.1:8000). Pada penggunaan pertama, halaman akan meminta pembuatan satu atau lebih akun Owner dan Pegawai.
 
 Biarkan terminal tetap terbuka selama aplikasi digunakan. Halaman penyiapan hanya tersedia sebelum akun pertama dibuat.
 
@@ -43,6 +45,7 @@ Biarkan terminal tetap terbuka selama aplikasi digunakan. Halaman penyiapan hany
 - Pencarian dan pagination pada daftar data.
 - Kartu stok untuk melihat transaksi barang masuk dan keluar.
 - Transaksi penjualan dengan validasi stok dan pengurangan stok otomatis.
+- Checkout QRIS dalam mode simulasi lokal secara default, atau melalui Xendit jika integrasi live diaktifkan secara eksplisit.
 - Transaksi pembelian dengan stok bertambah setelah barang diterima.
 - Laporan penjualan dan pembelian dengan filter rentang tanggal untuk Owner.
 - OCR nota pembelian lokal, hasilnya dapat diperiksa sebelum transaksi disimpan.

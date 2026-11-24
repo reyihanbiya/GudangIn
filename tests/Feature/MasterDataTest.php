@@ -61,6 +61,7 @@ class MasterDataTest extends TestCase
             ->assertOk()
             ->assertSee('app-layout')
             ->assertSee('Pengiriman')
+            ->assertSee('Data pelanggan')
             ->assertSee('Menu utama')
             ->assertSee('Nama pelanggan')
             ->assertSee('No. telepon')
@@ -118,12 +119,19 @@ class MasterDataTest extends TestCase
             ->get(route('employee.persediaan.index'))
             ->assertOk()
             ->assertSee('Rp13.500')
-            ->assertSee('12,75 kg');
+            ->assertSee('12,75 kg')
+            ->assertSee('Total barang')
+            ->assertSee('Jenis satuan')
+            ->assertSee('Material')
+            ->assertSee('app-document-body')
+            ->assertDontSee('Kartu stok')
+            ->assertSee('data-icon="inventory"', false)
+            ->assertSee('data-icon="receipt"', false);
 
         $this->actingAs($employee, 'employee')
             ->post(route('employee.persediaan.store'), [
                 'nama_barang' => 'Tali',
-                'kategori_barang' => 'Material',
+                'kategori_barang' => 'Aksesori',
                 'satuan' => '__custom__',
                 'satuan_custom' => 'ikat',
                 'stok' => '1',
@@ -135,5 +143,11 @@ class MasterDataTest extends TestCase
             'nama_barang' => 'Tali',
             'satuan' => 'ikat',
         ]);
+
+        $this->actingAs($employee, 'employee')
+            ->get(route('employee.persediaan.index', ['category' => 'Material']))
+            ->assertOk()
+            ->assertSee('Pasir')
+            ->assertDontSee('Tali');
     }
 }

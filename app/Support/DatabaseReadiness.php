@@ -18,6 +18,7 @@ class DatabaseReadiness
         'detail_pembelian',
         'nota_pembelian',
         'sys_sequences',
+        'xendit_payments',
     ];
 
     private const REQUIRED_VIEWS = [
