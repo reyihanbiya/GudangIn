@@ -39,5 +39,11 @@ return [
         'languages' => env('TESSERACT_LANGUAGES', 'eng+ind'),
         'timeout' => env('TESSERACT_TIMEOUT', 60),
     ],
+    'xendit' => [
+        'simulation' => env('XENDIT_SIMULATION', true),
+        'secret_key' => env('XENDIT_SECRET_KEY'),
+        'webhook_token' => env('XENDIT_WEBHOOK_TOKEN'),
+        'api_url' => env('XENDIT_API_URL', 'https://api.xendit.co'),
+    ],
 
 ];

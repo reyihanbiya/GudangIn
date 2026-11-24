@@ -3,13 +3,16 @@
 namespace Tests\Feature;
 
 use App\Models\Pegawai;
+use App\Models\DetailPenjualan;
 use App\Models\Pelanggan;
 use App\Models\Pembelian;
 use App\Models\Penjualan;
 use App\Models\Persediaan;
 use App\Models\Supplier;
+use App\Models\XenditPayment;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -180,8 +183,58 @@ class TransactionFlowTest extends TestCase
             ->assertSee('0,75 kg');
     }
 
+    public function test_employee_can_export_a_delivery_note_pdf_from_the_delivery_menu(): void
+    {
+        $transaction = Penjualan::query()->create([
+            'id_penjualan' => 'PJ26110001',
+            'id_pelanggan' => $this->customer->id_pelanggan,
+            'id_pegawai' => $this->employee->id_pegawai,
+            'tanggal' => today()->toDateString(),
+        ]);
+        DetailPenjualan::query()->create([
+            'id_penjualan' => $transaction->id_penjualan,
+            'id_persediaan' => $this->product->id_persediaan,
+            'satuan' => 'sak',
+            'harga_satuan' => 75000,
+            'jumlah_barang' => 3,
+        ]);
+
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.penjualan.history'))
+            ->assertOk()
+            ->assertSee('Aksi')
+            ->assertDontSee('Ekspor PDF');
+
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pengiriman.index'))
+            ->assertOk()
+            ->assertSee('Pelanggan Uji')
+            ->assertSee('Lihat PDF')
+            ->assertSee('Ekspor PDF')
+            ->assertSee(route('employee.penjualan.delivery-note.preview', $transaction), false)
+            ->assertSee(route('employee.penjualan.delivery-note', $transaction), false);
+
+        $previewResponse = $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.penjualan.delivery-note.preview', $transaction));
+
+        $previewResponse->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('inline;', $previewResponse->headers->get('content-disposition'));
+        $this->assertStringStartsWith('%PDF-', $previewResponse->getContent());
+
+        $response = $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.penjualan.delivery-note', $transaction));
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertHeader('content-disposition', 'attachment; filename=surat-jalan-PJ26110001.pdf');
+        $this->assertStringStartsWith('%PDF-', $response->getContent());
+    }
+
     public function test_cashier_can_create_customer_with_shipping_address_during_checkout(): void
     {
+        $this->fakeXenditPayment();
+
         $response = $this->actingAs($this->employee, 'employee')
             ->post(route('employee.penjualan.cashier.store'), [
                 'pelanggan_baru' => [
@@ -198,16 +251,125 @@ class TransactionFlowTest extends TestCase
             ]);
 
         $customer = Pelanggan::query()->where('nama_pelanggan', 'Pelanggan Kasir')->firstOrFail();
-        $response->assertRedirect(route('employee.penjualan.show', Penjualan::query()->firstOrFail()));
+        $payment = XenditPayment::query()->firstOrFail();
+        $response->assertRedirect(route('employee.penjualan.payment.show', $payment));
         $this->assertSame('08123456789', $customer->no_hp);
         $this->assertSame('Jl. Contoh No. 10', $customer->alamat);
-        $this->assertDatabaseHas('penjualan', [
-            'id_pelanggan' => $customer->id_pelanggan,
+        $this->assertSame('PENDING', $payment->status);
+        $this->assertSame('75000.00', $payment->amount);
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.penjualan.payment.show', $payment))
+            ->assertOk()
+            ->assertSee('Bayar dengan QRIS')
+            ->assertSee('Rp75.000')
+            ->assertSee('qris-code');
+        $this->assertDatabaseCount('penjualan', 0);
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 4,
         ]);
+
+        $this->postJson(route('xendit.webhook'), [
+            'event' => 'payment.capture',
+            'data' => ['payment_request_id' => $payment->payment_request_id],
+        ], ['x-callback-token' => 'invalid-token'])->assertUnauthorized();
+
+        $this->postJson(route('xendit.webhook'), [
+            'event' => 'payment.capture',
+            'data' => [
+                'payment_request_id' => $payment->payment_request_id,
+                'payment_id' => 'py_test_1',
+                'reference_id' => $payment->reference_id,
+                'request_amount' => 75000,
+                'currency' => 'IDR',
+                'status' => 'SUCCEEDED',
+            ],
+        ], ['x-callback-token' => 'test-webhook-token'])->assertOk();
+
+        $sale = Penjualan::query()->firstOrFail();
+        $this->assertSame($customer->id_pelanggan, $sale->id_pelanggan);
+        $this->assertDatabaseHas('detail_penjualan', [
+            'id_penjualan' => $sale->id_penjualan,
+            'harga_satuan' => 75000,
+            'jumlah_barang' => 1,
+        ]);
+        $this->assertDatabaseHas('xendit_payments', [
+            'id' => $payment->id,
+            'status' => 'SUCCEEDED',
+            'id_penjualan' => $sale->id_penjualan,
+        ]);
+
+        $this->postJson(route('xendit.webhook'), [
+            'event' => 'payment.capture',
+            'data' => [
+                'payment_request_id' => $payment->payment_request_id,
+                'payment_id' => 'py_test_1',
+                'reference_id' => $payment->reference_id,
+                'request_amount' => 75000,
+                'currency' => 'IDR',
+                'status' => 'SUCCEEDED',
+            ],
+        ], ['x-callback-token' => 'test-webhook-token'])->assertOk();
+        $this->assertDatabaseCount('penjualan', 1);
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 4,
+        ]);
+
         $this->actingAs($this->employee, 'employee')
             ->get(route('employee.pelanggan.index'))
             ->assertSee('Pelanggan Kasir')
             ->assertSee('Jl. Contoh No. 10');
+    }
+
+    public function test_simulated_checkout_never_calls_xendit_and_only_creates_sale_after_simulation_button(): void
+    {
+        config(['services.xendit.simulation' => true]);
+        Http::fake();
+
+        $response = $this->actingAs($this->employee, 'employee')
+            ->post(route('employee.penjualan.cashier.store'), [
+                'pelanggan_baru' => [
+                    'nama_pelanggan' => 'Pelanggan Simulasi',
+                    'alamat' => 'Jl. Simulasi No. 1',
+                ],
+                'tanggal' => today()->toDateString(),
+                'items' => [[
+                    'id_persediaan' => $this->product->id_persediaan,
+                    'jumlah_barang' => 1,
+                    'harga_satuan' => 1,
+                ]],
+            ]);
+
+        $payment = XenditPayment::query()->firstOrFail();
+        $response->assertRedirect(route('employee.penjualan.payment.show', $payment));
+        $this->assertTrue($payment->isSimulation());
+        $this->assertSame('75000.00', $payment->amount);
+        $this->assertSame(5.0, (float) $this->product->fresh()->stok);
+        $this->assertDatabaseCount('penjualan', 0);
+
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.penjualan.payment.show', $payment))
+            ->assertOk()
+            ->assertSee('QR ini tidak dapat digunakan untuk membayar sungguhan')
+            ->assertSee('Bayar (Simulasi)');
+
+        $this->actingAs($this->employee, 'employee')
+            ->post(route('employee.penjualan.payment.simulate', $payment))
+            ->assertRedirect();
+
+        $payment->refresh();
+        $this->assertSame('SUCCEEDED', $payment->status);
+        $this->assertNotNull($payment->id_penjualan);
+        $this->assertSame(4.0, (float) $this->product->fresh()->stok);
+        $this->assertDatabaseCount('penjualan', 1);
+        $this->assertDatabaseHas('detail_penjualan', [
+            'id_penjualan' => $payment->id_penjualan,
+            'id_persediaan' => $this->product->id_persediaan,
+            'harga_satuan' => 75000,
+            'jumlah_barang' => 1,
+        ]);
+        Http::assertNothingSent();
     }
 
     public function test_sale_requires_customer_details(): void
@@ -298,6 +460,8 @@ class TransactionFlowTest extends TestCase
 
     public function test_cashier_uses_inventory_price_instead_of_submitted_price(): void
     {
+        $this->fakeXenditPayment();
+
         $response = $this->actingAs($this->employee, 'employee')
             ->post(route('employee.penjualan.cashier.store'), [
                 'pelanggan_baru' => [
@@ -313,9 +477,168 @@ class TransactionFlowTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $this->assertDatabaseHas('detail_penjualan', [
+        $this->assertDatabaseHas('xendit_payments', [
+            'amount' => 75000,
+            'status' => 'PENDING',
+        ]);
+        Http::assertSent(fn ($request) => (float) $request['request_amount'] === 75000.0
+            && $request['currency'] === 'IDR'
+            && $request['channel_code'] === 'QRIS'
+            && $request['channel_properties']['qr_string_type'] === 'DYNAMIC'
+            && $request->hasHeader('api-version', '2024-11-11'));
+        $this->assertDatabaseCount('detail_penjualan', 0);
+    }
+
+    public function test_cashier_rejects_a_xendit_public_key_without_sending_a_payment_request(): void
+    {
+        $this->fakeXenditPayment();
+        config(['services.xendit.secret_key' => 'xnd_public_test_key']);
+
+        $this->actingAs($this->employee, 'employee')
+            ->post(route('employee.penjualan.cashier.store'), [
+                'pelanggan_baru' => [
+                    'nama_pelanggan' => 'Pelanggan Kasir',
+                    'alamat' => 'Jl. Contoh No. 10',
+                ],
+                'tanggal' => today()->toDateString(),
+                'items' => [[
+                    'id_persediaan' => $this->product->id_persediaan,
+                    'jumlah_barang' => 1,
+                    'harga_satuan' => 75000,
+                ]],
+            ])
+            ->assertSessionHasErrors([
+                'payment' => 'XENDIT_SECRET_KEY berisi Public Key. Ganti dengan Secret Key Xendit dari dashboard.',
+            ]);
+
+        Http::assertNothingSent();
+        $this->assertDatabaseCount('xendit_payments', 0);
+        $this->assertDatabaseHas('persediaan', [
             'id_persediaan' => $this->product->id_persediaan,
-            'harga_satuan' => 75000,
+            'stok' => 5,
+        ]);
+    }
+
+    public function test_xendit_validation_details_are_shown_without_reserving_stock(): void
+    {
+        config([
+            'services.xendit.simulation' => false,
+            'services.xendit.secret_key' => 'xnd_development_test_key',
+            'services.xendit.webhook_token' => 'test-webhook-token',
+        ]);
+        Http::fake([
+            'https://api.xendit.co/v3/payment_requests' => Http::response([
+                'error_code' => 'API_VALIDATION_ERROR',
+                'message' => 'Invalid request.',
+                'errors' => [[
+                    'path' => 'channel_code',
+                    'message' => 'Channel is not enabled.',
+                ]],
+            ], 400),
+        ]);
+
+        $this->actingAs($this->employee, 'employee')
+            ->post(route('employee.penjualan.cashier.store'), [
+                'pelanggan_baru' => [
+                    'nama_pelanggan' => 'Pelanggan Kasir',
+                    'alamat' => 'Jl. Contoh No. 10',
+                ],
+                'tanggal' => today()->toDateString(),
+                'items' => [[
+                    'id_persediaan' => $this->product->id_persediaan,
+                    'jumlah_barang' => 1,
+                    'harga_satuan' => 75000,
+                ]],
+            ])
+            ->assertSessionHasErrors([
+                'payment' => 'Xendit menolak data pembayaran QRIS (HTTP 400). Kode: API_VALIDATION_ERROR. Detail: Invalid request.; channel_code: Channel is not enabled.',
+            ]);
+
+        $this->assertDatabaseCount('xendit_payments', 0);
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 5,
+        ]);
+    }
+
+    public function test_expired_qris_payment_releases_reserved_stock_once(): void
+    {
+        $this->fakeXenditPayment();
+
+        $this->actingAs($this->employee, 'employee')
+            ->post(route('employee.penjualan.cashier.store'), [
+                'pelanggan_baru' => [
+                    'nama_pelanggan' => 'Pelanggan Kasir',
+                    'alamat' => 'Jl. Contoh No. 10',
+                ],
+                'tanggal' => today()->toDateString(),
+                'items' => [[
+                    'id_persediaan' => $this->product->id_persediaan,
+                    'jumlah_barang' => 2,
+                    'harga_satuan' => 75000,
+                ]],
+            ])->assertRedirect();
+
+        $payment = XenditPayment::query()->firstOrFail();
+        $this->postJson(route('xendit.webhook'), [
+            'event' => 'payment_request.expiry',
+            'data' => ['payment_request_id' => $payment->payment_request_id],
+        ], ['x-callback-token' => 'test-webhook-token'])->assertOk();
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 5,
+        ]);
+
+        $this->postJson(route('xendit.webhook'), [
+            'event' => 'payment_request.expiry',
+            'data' => ['payment_request_id' => $payment->payment_request_id],
+        ], ['x-callback-token' => 'test-webhook-token'])->assertOk();
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 5,
+        ]);
+        $this->assertDatabaseHas('xendit_payments', [
+            'id' => $payment->id,
+            'status' => 'EXPIRED',
+        ]);
+
+        $this->product->update(['stok' => 0]);
+        $this->postJson(route('xendit.webhook'), [
+            'event' => 'payment.capture',
+            'data' => [
+                'payment_request_id' => $payment->payment_request_id,
+                'payment_id' => 'py_late_capture',
+                'reference_id' => $payment->reference_id,
+                'request_amount' => 150000,
+                'currency' => 'IDR',
+                'status' => 'SUCCEEDED',
+            ],
+        ], ['x-callback-token' => 'test-webhook-token'])->assertOk();
+        $this->assertDatabaseHas('xendit_payments', [
+            'id' => $payment->id,
+            'status' => 'PAID_STOCK_CONFLICT',
+            'payment_id' => 'py_late_capture',
+        ]);
+        $this->assertDatabaseCount('penjualan', 0);
+    }
+
+    private function fakeXenditPayment(): void
+    {
+        config([
+            'services.xendit.simulation' => false,
+            'services.xendit.secret_key' => 'xnd_development_key',
+            'services.xendit.webhook_token' => 'test-webhook-token',
+        ]);
+
+        Http::fake([
+            'https://api.xendit.co/v3/payment_requests' => Http::response([
+                'payment_request_id' => 'pr_test_1',
+                'actions' => [[
+                    'type' => 'PRESENT_TO_CUSTOMER',
+                    'value' => 'test-qris-payload',
+                    'descriptor' => 'QR_CODE',
+                ]],
+            ]),
         ]);
     }
 

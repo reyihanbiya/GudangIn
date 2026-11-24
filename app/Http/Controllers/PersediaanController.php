@@ -41,38 +41,42 @@ class PersediaanController extends Controller
 
     public function index(Request $request): View
     {
-        $search = $request->validate([
+        $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
-        ])['search'] ?? null;
+            'category' => ['nullable', 'string', 'max:50'],
+        ]);
+        $search = $filters['search'] ?? null;
+        $category = $filters['category'] ?? null;
 
         $inventory = Persediaan::query()
             ->when($search, function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
-                    $query->where('nama_barang', 'like', "%{$search}%")
+                    $query->where('id_persediaan', 'like', "%{$search}%")
+                        ->orWhere('nama_barang', 'like', "%{$search}%")
                         ->orWhere('kategori_barang', 'like', "%{$search}%")
                         ->orWhere('satuan', 'like', "%{$search}%");
                 });
             })
+            ->when($category, fn ($query) => $query->where('kategori_barang', $category))
             ->orderBy('nama_barang')
             ->paginate(10)
             ->withQueryString();
 
-        return view('masters.index', [
-            'title' => 'Persediaan',
-            'description' => 'Kelola barang, harga jual, satuan ukur, dan stok yang tersedia.',
-            'createRoute' => 'employee.persediaan.create',
-            'editRoute' => 'employee.persediaan.edit',
-            'deleteRoute' => 'employee.persediaan.destroy',
+        $categories = Persediaan::query()
+            ->whereNotNull('kategori_barang')
+            ->where('kategori_barang', '<>', '')
+            ->distinct()
+            ->orderBy('kategori_barang')
+            ->pluck('kategori_barang');
+
+        return view('masters.inventory', [
             'search' => $search,
-            'columns' => [
-                ['label' => 'ID', 'field' => 'id_persediaan'],
-                ['label' => 'Nama barang', 'field' => 'nama_barang'],
-                ['label' => 'Kategori', 'field' => 'kategori_barang'],
-                ['label' => 'Harga jual', 'field' => 'harga_jual_format'],
-                ['label' => 'Stok', 'field' => 'stok_dengan_satuan'],
-            ],
+            'category' => $category,
+            'categories' => $categories,
             'rows' => $inventory,
-            'stockCardRoute' => 'employee.persediaan.stock-card',
+            'totalItems' => Persediaan::query()->count(),
+            'outOfStockItems' => Persediaan::query()->where('stok', '<=', 0)->count(),
+            'unitTypes' => Persediaan::query()->distinct()->count('satuan'),
         ]);
     }
 

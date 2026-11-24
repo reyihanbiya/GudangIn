@@ -93,9 +93,12 @@
                     <div class="cashier-subtotal"><span>Subtotal</span><strong id="cashier-subtotal">Rp0</strong></div>
                     <div class="cashier-total"><span>Total</span><strong id="cashier-total">Rp0</strong></div>
                     <button class="cashier-checkout-button" id="cashier-checkout" type="submit" disabled>
-                        Checkout <span aria-hidden="true">→</span>
+                        {{ config('services.xendit.simulation') ? 'Buat QR Simulasi' : 'Bayar QRIS' }}
+                        <span aria-hidden="true">→</span>
                     </button>
-                    <p class="cashier-checkout-hint" id="cashier-checkout-hint">0 barang dipilih</p>
+                    <p class="cashier-checkout-hint" id="cashier-checkout-hint">
+                        {{ config('services.xendit.simulation') ? 'Mode simulasi · tidak ada pembayaran sungguhan' : 'Pembayaran aman melalui Xendit' }}
+                    </p>
                 </div>
             </form>
         </aside>
@@ -116,7 +119,7 @@
             const newCustomerAddress = newCustomerFields.querySelector('[name="pelanggan_baru[alamat]"]');
             const checkout = document.getElementById('cashier-checkout');
             const checkoutHint = document.getElementById('cashier-checkout-hint');
-            const money = (amount) => `Rp${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(amount || 0)}`;
+            const money = (amount) => `Rp${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 }).format(amount || 0)}`;
             const cart = new Map();
             let activeCategory = 'Semua barang';
 
@@ -131,7 +134,7 @@
                 cartCount.textContent = cart.size;
                 document.getElementById('cashier-subtotal').textContent = money(total);
                 document.getElementById('cashier-total').textContent = money(total);
-                checkoutHint.textContent = `${cart.size} jenis barang dipilih`;
+                checkoutHint.textContent = `${cart.size} jenis barang dipilih · QRIS`;
                 const customerIsValid = Boolean(newCustomerName.value.trim() && newCustomerAddress.value.trim());
                 checkout.disabled = cart.size === 0 || !customerIsValid
                     || [...cart.values()].some((item) => !Number.isFinite(Number(item.price)) || Number(item.price) <= 0
@@ -278,6 +281,7 @@
                         cartContainer.appendChild(input);
                     });
                 });
+                checkout.disabled = true;
             });
 
             @if (old('items'))

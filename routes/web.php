@@ -8,6 +8,7 @@ use App\Http\Controllers\OwnerAccountController;
 use App\Http\Controllers\OwnerRegistrationController;
 use App\Http\Controllers\PembelianController;
 use App\Http\Controllers\PelangganController;
+use App\Http\Controllers\PengirimanController;
 use App\Http\Controllers\PenjualanController;
 use App\Http\Controllers\PersediaanController;
 use App\Http\Controllers\ReportController;
@@ -43,6 +44,7 @@ Route::post('/owner/login', [AuthController::class, 'ownerLogin'])
 
 Route::middleware('auth:employee')->prefix('employee')->name('employee.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'employee'])->name('dashboard');
+    Route::get('/pengiriman', [PengirimanController::class, 'index'])->name('pengiriman.index');
     Route::resource('pelanggan', PelangganController::class)->except(['show']);
     Route::get('/persediaan/{persediaan}/kartu-stok', [PersediaanController::class, 'stockCard'])
         ->name('persediaan.stock-card');
@@ -51,8 +53,21 @@ Route::middleware('auth:employee')->prefix('employee')->name('employee.')->group
     Route::get('/penjualan', [PenjualanController::class, 'index'])->name('penjualan.index');
     Route::get('/penjualan/create', [PenjualanController::class, 'create'])->name('penjualan.create');
     Route::get('/penjualan/riwayat', [PenjualanController::class, 'history'])->name('penjualan.history');
-    Route::post('/penjualan/kasir', [PenjualanController::class, 'cashierStore'])->name('penjualan.cashier.store');
+    Route::post('/penjualan/kasir', [PenjualanController::class, 'cashierStore'])
+        ->middleware('throttle:10,1')
+        ->name('penjualan.cashier.store');
+    Route::get('/penjualan/checkout/{payment}', [PenjualanController::class, 'payment'])
+        ->name('penjualan.payment.show');
+    Route::post('/penjualan/checkout/{payment}/simulate', [PenjualanController::class, 'simulatePayment'])
+        ->middleware('throttle:10,1')
+        ->name('penjualan.payment.simulate');
+    Route::get('/penjualan/checkout/{payment}/status', [PenjualanController::class, 'paymentStatus'])
+        ->name('penjualan.payment.status');
     Route::post('/penjualan', [PenjualanController::class, 'store'])->name('penjualan.store');
+    Route::get('/penjualan/{penjualan}/surat-jalan/preview', [PenjualanController::class, 'previewDeliveryNote'])
+        ->name('penjualan.delivery-note.preview');
+    Route::get('/penjualan/{penjualan}/surat-jalan', [PenjualanController::class, 'deliveryNote'])
+        ->name('penjualan.delivery-note');
     Route::get('/penjualan/{penjualan}', [PenjualanController::class, 'show'])->name('penjualan.show');
     Route::get('/pembelian', [PembelianController::class, 'index'])->name('pembelian.index');
     Route::get('/pembelian/create', [PembelianController::class, 'create'])->name('pembelian.create');

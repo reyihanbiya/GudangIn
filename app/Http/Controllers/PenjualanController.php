@@ -6,12 +6,21 @@ use App\Models\DetailPenjualan;
 use App\Models\Pelanggan;
 use App\Models\Penjualan;
 use App\Models\Persediaan;
+use App\Models\XenditPayment;
 use App\Services\CodeGeneratorService;
+use App\Services\PenjualanPaymentSettlementService;
+use App\Services\XenditPaymentException;
+use App\Services\XenditPaymentService;
+use Barryvdh\DomPDF\PDF as DompdfDocument;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -40,6 +49,28 @@ class PenjualanController extends Controller
         return view('transactions.sales-index', compact('transactions'));
     }
 
+    public function deliveryNote(Penjualan $penjualan): Response
+    {
+        return $this->makeDeliveryNote($penjualan)->download(
+            'surat-jalan-'.$penjualan->id_penjualan.'.pdf'
+        );
+    }
+
+    public function previewDeliveryNote(Penjualan $penjualan): Response
+    {
+        return $this->makeDeliveryNote($penjualan)->stream(
+            'surat-jalan-'.$penjualan->id_penjualan.'.pdf'
+        );
+    }
+
+    private function makeDeliveryNote(Penjualan $penjualan): DompdfDocument
+    {
+        $penjualan->load(['pelanggan', 'detailPenjualan.persediaan']);
+
+        return Pdf::loadView('transactions.delivery-note', compact('penjualan'))
+            ->setPaper('a4', 'portrait');
+    }
+
     public function create(): View
     {
         return view('transactions.form', [
@@ -54,20 +85,164 @@ class PenjualanController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        return $this->saveTransaction($request, false);
+        return $this->saveTransaction($request);
     }
 
     public function cashierStore(Request $request): RedirectResponse
     {
-        return $this->saveTransaction($request, true);
+        $data = $this->validateTransaction($request, 'harga_satuan');
+        $employee = Auth::guard('employee')->user();
+        $simulation = (bool) config('services.xendit.simulation');
+
+        try {
+            $payment = DB::transaction(function () use ($data, $employee, $simulation): XenditPayment {
+                $customerId = $data['id_pelanggan'] ?? null;
+
+                if (filled($data['pelanggan_baru']['nama_pelanggan'] ?? null)) {
+                    $customer = Pelanggan::query()->create([
+                        'id_pelanggan' => CodeGeneratorService::generate('pelanggan'),
+                        'nama_pelanggan' => $data['pelanggan_baru']['nama_pelanggan'],
+                        'no_hp' => $data['pelanggan_baru']['no_hp'] ?? null,
+                        'alamat' => $data['pelanggan_baru']['alamat'] ?? null,
+                    ]);
+                    $customerId = $customer->id_pelanggan;
+                }
+
+                $items = [];
+                $amount = 0;
+
+                foreach ($data['items'] as $item) {
+                    $inventory = Persediaan::query()
+                        ->where('id_persediaan', $item['id_persediaan'])
+                        ->lockForUpdate()
+                        ->firstOrFail();
+
+                    if ($inventory->stok < $item['jumlah_barang']) {
+                        throw ValidationException::withMessages([
+                            'items' => "Stok {$inventory->nama_barang} tidak mencukupi. Tersedia {$inventory->stok_dengan_satuan}.",
+                        ]);
+                    }
+
+                    $unitPrice = $inventory->harga_jual;
+                    if ($unitPrice === null || (float) $unitPrice <= 0) {
+                        throw ValidationException::withMessages([
+                            'items' => "Harga jual {$inventory->nama_barang} belum diatur di data persediaan.",
+                        ]);
+                    }
+
+                    $quantity = (float) $item['jumlah_barang'];
+                    $items[] = [
+                        'id_persediaan' => $inventory->id_persediaan,
+                        'satuan' => $inventory->satuan,
+                        'harga_satuan' => $unitPrice,
+                        'jumlah_barang' => $item['jumlah_barang'],
+                    ];
+                    $amount += (float) $unitPrice * $quantity;
+                }
+
+                $amount = round($amount, 2);
+                if ($amount < 1 || $amount > 10000000) {
+                    throw ValidationException::withMessages([
+                        'items' => 'Total pembayaran QRIS harus antara Rp1 dan Rp10.000.000.',
+                    ]);
+                }
+
+                $referenceId = (string) Str::uuid();
+                $xenditPayment = $simulation
+                    ? [
+                        'payment_request_id' => 'sim-'.$referenceId,
+                        'qr_string' => 'SIMULASI QRIS - TIDAK ADA PEMBAYARAN '.$referenceId,
+                        'expires_at' => null,
+                    ]
+                    : app(XenditPaymentService::class)->createQrisPayment($referenceId, $amount);
+
+                if (! $simulation) {
+                    foreach ($items as $item) {
+                        Persediaan::query()
+                            ->where('id_persediaan', $item['id_persediaan'])
+                            ->decrement('stok', $item['jumlah_barang']);
+                    }
+                }
+
+                return XenditPayment::query()->create([
+                    'id' => $referenceId,
+                    'reference_id' => $referenceId,
+                    'payment_request_id' => $xenditPayment['payment_request_id'],
+                    'id_pelanggan' => $customerId,
+                    'id_pegawai' => $employee->id_pegawai,
+                    'tanggal' => $data['tanggal'],
+                    'amount' => $amount,
+                    'items' => $items,
+                    'qr_string' => $xenditPayment['qr_string'],
+                    'status' => 'PENDING',
+                    'expires_at' => $xenditPayment['expires_at'],
+                ]);
+            });
+        } catch (XenditPaymentException $exception) {
+            return back()->withInput()->withErrors(['payment' => $exception->getMessage()]);
+        } catch (ConnectionException $exception) {
+            report($exception);
+
+            return back()->withInput()->withErrors([
+                'payment' => 'Tidak dapat terhubung ke Xendit. Periksa koneksi internet lalu coba lagi.',
+            ]);
+        }
+
+        return redirect()->route('employee.penjualan.payment.show', $payment);
     }
 
-    private function saveTransaction(Request $request, bool $cashierCheckout): RedirectResponse
+    public function payment(XenditPayment $payment): View
+    {
+        $this->authorizePayment($payment);
+
+        return view('transactions.qris-payment', compact('payment'));
+    }
+
+    public function paymentStatus(XenditPayment $payment): \Illuminate\Http\JsonResponse
+    {
+        $this->authorizePayment($payment);
+
+        return response()->json([
+            'status' => $payment->status,
+            'sale_url' => $payment->id_penjualan
+                ? route('employee.penjualan.show', $payment->id_penjualan)
+                : null,
+        ]);
+    }
+
+    public function simulatePayment(
+        XenditPayment $payment,
+        PenjualanPaymentSettlementService $settlement
+    ): RedirectResponse {
+        $this->authorizePayment($payment);
+        abort_unless($payment->isSimulation(), 404);
+
+        $settlement->capture($payment, 'sim-'.$payment->reference_id);
+        $payment->refresh();
+
+        if ($payment->status !== 'SUCCEEDED' || ! $payment->id_penjualan) {
+            return back()->withErrors(['payment' => 'Simulasi pembayaran belum dapat diselesaikan.']);
+        }
+
+        return redirect()
+            ->route('employee.penjualan.show', $payment->id_penjualan)
+            ->with('status', 'Pembayaran simulasi berhasil. Tidak ada pembayaran sungguhan.');
+    }
+
+    private function authorizePayment(XenditPayment $payment): void
+    {
+        abort_unless(
+            $payment->id_pegawai === Auth::guard('employee')->user()->id_pegawai,
+            403
+        );
+    }
+
+    private function saveTransaction(Request $request): RedirectResponse
     {
         $data = $this->validateTransaction($request, 'harga_satuan');
         $employee = Auth::guard('employee')->user();
 
-        $transaction = DB::transaction(function () use ($data, $employee, $cashierCheckout): Penjualan {
+        $transaction = DB::transaction(function () use ($data, $employee): Penjualan {
             $customerId = $data['id_pelanggan'] ?? null;
 
             if (filled($data['pelanggan_baru']['nama_pelanggan'] ?? null)) {
@@ -102,7 +277,7 @@ class PenjualanController extends Controller
                     ]);
                 }
 
-                $unitPrice = $cashierCheckout ? $inventory->harga_jual : $item['harga_satuan'];
+                $unitPrice = $item['harga_satuan'];
 
                 if ($unitPrice === null || (float) $unitPrice <= 0) {
                     throw ValidationException::withMessages([

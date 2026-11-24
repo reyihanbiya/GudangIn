@@ -7,7 +7,7 @@
         <div>
             <p class="eyebrow">Kelola akses Owner</p>
             <h1>Akun Owner</h1>
-            <p class="lead">Tambahkan Owner baru. Akun Owner hanya dapat dibuat dari area Owner.</p>
+            <p class="lead">Daftar akun Owner yang terdaftar di GudangIn.</p>
         </div>
     </section>
 
@@ -17,28 +17,6 @@
     @if ($errors->any())
         <div class="notice notice-error page-notice">{{ $errors->first() }}</div>
     @endif
-
-    <section class="form-panel master-form-panel">
-        <h2>Tambah akun Owner</h2>
-        <form method="POST" action="{{ route('owner.accounts.store') }}" class="stack-form">
-            @csrf
-            <label for="nama_owner">Nama Owner</label>
-            <input id="nama_owner" name="nama_owner" value="{{ old('nama_owner') }}" maxlength="100" required>
-
-            <label for="username">Username</label>
-            <input id="username" name="username" value="{{ old('username') }}" maxlength="50" autocomplete="username" required>
-
-            <label for="password">Password</label>
-            <input id="password" name="password" type="password" minlength="8" autocomplete="new-password" required>
-
-            <label for="password_confirmation">Ulangi password</label>
-            <input id="password_confirmation" name="password_confirmation" type="password" minlength="8" autocomplete="new-password" required>
-
-            <div class="form-actions">
-                <button class="button button-primary" type="submit">Buat akun Owner</button>
-            </div>
-        </form>
-    </section>
 
     <section class="table-panel account-list-panel">
         <div class="account-list-section">
