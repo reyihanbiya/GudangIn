@@ -6,9 +6,11 @@ use App\Models\Pembelian;
 use App\Models\Persediaan;
 use App\Models\Supplier;
 use App\Services\ReceiptOcrException;
+use App\Services\ReceiptOcrParser;
 use App\Services\ReceiptOcrService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -52,7 +54,52 @@ class ReceiptOcrController extends Controller
         return redirect()->route('employee.pembelian.ocr.review', $token);
     }
 
-    public function review(Request $request, string $token): View
+    public function processApi(Request $request, ReceiptOcrService $ocr): JsonResponse
+    {
+        $data = $request->validate([
+            'receipt' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+        ]);
+
+        $token = (string) Str::uuid();
+        $file = $data['receipt'];
+        $path = $file->storeAs('receipts', $token.'.'.$file->extension(), 'local');
+
+        if (! is_string($path) || $path === '') {
+            return response()->json([
+                'success' => false,
+                'message' => 'File nota tidak dapat disimpan.',
+            ], 500);
+        }
+
+        try {
+            $text = $ocr->extract(Storage::disk('local')->path($path));
+        } catch (ReceiptOcrException $exception) {
+            Storage::disk('local')->delete($path);
+
+            return response()->json([
+                'success' => false,
+                'message' => $exception->getMessage(),
+            ], 422);
+        }
+
+        $request->session()->put('receipt_drafts.'.$token, [
+            'employee_id' => Auth::guard('employee')->id(),
+            'file_path' => $path,
+            'hasil_ocr' => $text,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Nota berhasil diproses.',
+            'data' => [
+                'receipt_token' => $token,
+                'hasil_ocr' => $text,
+                'file_path' => $path,
+            ],
+        ], 201);
+    }
+
+    public function review(Request $request, string $token, ReceiptOcrParser $parser): View
     {
         $draft = $request->session()->get('receipt_drafts.'.$token);
 
@@ -63,15 +110,23 @@ class ReceiptOcrController extends Controller
             404
         );
 
+        $suppliers = Supplier::query()->orderBy('nama_supplier')->get();
+        $products = Persediaan::query()->orderBy('nama_barang')->get();
+        $ocrPrefill = $parser->parse(
+            (string) $draft['hasil_ocr'],
+            $suppliers,
+            $products
+        );
+
         return view('transactions.form', [
             'type' => 'Pembelian',
             'action' => route('employee.pembelian.ocr.store'),
-            'counterparts' => Supplier::query()->orderBy('nama_supplier')->get(),
-            'products' => Persediaan::query()->orderBy('nama_barang')->get(),
+            'counterparts' => $suppliers,
+            'products' => $products,
             'date' => today()->toDateString(),
-            'showStatus' => true,
             'ocrText' => $draft['hasil_ocr'],
             'receiptToken' => $token,
+            'ocrPrefill' => $ocrPrefill,
         ]);
     }
 

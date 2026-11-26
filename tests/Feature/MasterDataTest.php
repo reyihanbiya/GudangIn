@@ -60,7 +60,8 @@ class MasterDataTest extends TestCase
             ->get(route('employee.pelanggan.index'))
             ->assertOk()
             ->assertSee('app-layout')
-            ->assertSee('Pelanggan')
+            ->assertSee('Pengiriman')
+            ->assertSee('Data pelanggan')
             ->assertSee('Menu utama')
             ->assertSee('Nama pelanggan')
             ->assertSee('No. telepon')
@@ -80,6 +81,7 @@ class MasterDataTest extends TestCase
             $table->string('kategori_barang', 50)->nullable();
             $table->string('satuan', 20)->default('unit');
             $table->decimal('stok', 15, 3)->default(0);
+            $table->decimal('harga_jual', 15, 2)->nullable();
         });
 
         $employee = Pegawai::query()->create([
@@ -96,6 +98,7 @@ class MasterDataTest extends TestCase
                 'kategori_barang' => 'Material',
                 'satuan' => 'kg',
                 'stok' => '12.750',
+                'harga_jual' => '13500',
             ])
             ->assertRedirect(route('employee.persediaan.index'));
 
@@ -104,6 +107,7 @@ class MasterDataTest extends TestCase
             'nama_barang' => 'Pasir',
             'satuan' => 'kg',
             'stok' => '12.750',
+            'harga_jual' => '13500.00',
         ]);
 
         $this->actingAs($employee, 'employee')
@@ -111,20 +115,30 @@ class MasterDataTest extends TestCase
             ->assertOk()
             ->assertSee('data-custom-select', false)
             ->assertSee('Kilogram (kg)')
+            ->assertSee('Harga jual')
             ->assertSee('Lainnya');
 
         $this->actingAs($employee, 'employee')
             ->get(route('employee.persediaan.index'))
             ->assertOk()
-            ->assertSee('12,75 kg');
+            ->assertSee('Rp13.500')
+            ->assertSee('12,75 kg')
+            ->assertSee('Total barang')
+            ->assertSee('Jenis satuan')
+            ->assertSee('Material')
+            ->assertSee('app-document-body')
+            ->assertDontSee('Kartu stok')
+            ->assertSee('data-icon="inventory"', false)
+            ->assertSee('data-icon="receipt"', false);
 
         $this->actingAs($employee, 'employee')
             ->post(route('employee.persediaan.store'), [
                 'nama_barang' => 'Tali',
-                'kategori_barang' => 'Material',
+                'kategori_barang' => 'Aksesori',
                 'satuan' => '__custom__',
                 'satuan_custom' => 'ikat',
                 'stok' => '1',
+                'harga_jual' => '2500',
             ])
             ->assertRedirect(route('employee.persediaan.index'));
 
@@ -132,5 +146,11 @@ class MasterDataTest extends TestCase
             'nama_barang' => 'Tali',
             'satuan' => 'ikat',
         ]);
+
+        $this->actingAs($employee, 'employee')
+            ->get(route('employee.persediaan.index', ['category' => 'Material']))
+            ->assertOk()
+            ->assertSee('Pasir')
+            ->assertDontSee('Tali');
     }
 }

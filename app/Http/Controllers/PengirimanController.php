@@ -39,12 +39,8 @@ class PengirimanController extends Controller
     {
         $penjualan->load(['pelanggan', 'detailPenjualan.persediaan']);
 
-        $pdf = Pdf::loadView('pdf.pelanggan', [
-            'pelanggan' => $penjualan->pelanggan,
+        $pdf = Pdf::loadView('transactions.delivery-note', [
             'penjualan' => $penjualan,
-            'idPengiriman' => $penjualan->id_pengiriman,
-            'detailBarang' => $penjualan->detailPenjualan,
-            'tanggalCetak' => now()->format('d-m-Y H:i'),
         ])->setPaper('a4', 'portrait');
 
         return $pdf->download('pengiriman-' . $penjualan->id_pengiriman . '.pdf');

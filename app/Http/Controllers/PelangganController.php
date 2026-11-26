@@ -30,8 +30,8 @@ class PelangganController extends Controller
             ->withQueryString();
 
         return view('masters.index', [
-            'title' => 'Pelanggan',
-            'description' => 'Kelola nama, nomor telepon, dan alamat pelanggan.',
+            'title' => 'Data pelanggan',
+            'description' => 'Kelola nama penerima, nomor telepon, dan alamat pelanggan.',
             'createRoute' => 'employee.pelanggan.create',
             'editRoute' => 'employee.pelanggan.edit',
             'deleteRoute' => 'employee.pelanggan.destroy',
@@ -59,7 +59,7 @@ class PelangganController extends Controller
         Pelanggan::query()->create($data);
 
         return redirect()->route('employee.pelanggan.index')
-            ->with('status', 'Data pengiriman berhasil ditambahkan.');
+            ->with('status', 'Data pelanggan berhasil ditambahkan.');
     }
 
     public function edit(Pelanggan $pelanggan): View
@@ -72,7 +72,7 @@ class PelangganController extends Controller
         $pelanggan->update($this->validateCustomer($request));
 
         return redirect()->route('employee.pelanggan.index')
-            ->with('status', 'Data pengiriman berhasil diperbarui.');
+            ->with('status', 'Data pelanggan berhasil diperbarui.');
     }
 
     public function destroy(Pelanggan $pelanggan): RedirectResponse
@@ -86,7 +86,7 @@ class PelangganController extends Controller
         $pelanggan->delete();
 
         return redirect()->route('employee.pelanggan.index')
-            ->with('status', 'Data pengiriman berhasil dihapus.');
+            ->with('status', 'Data pelanggan berhasil dihapus.');
     }
 
     /**
@@ -114,7 +114,7 @@ class PelangganController extends Controller
     private function form(?Pelanggan $pelanggan = null): View
     {
         return view('masters.form', [
-            'title' => $pelanggan ? 'Ubah data pengiriman' : 'Tambah data pengiriman',
+            'title' => $pelanggan ? 'Ubah data pelanggan' : 'Tambah data pelanggan',
             'fields' => [
                 [
                     'name' => 'nama_pelanggan',
@@ -148,7 +148,7 @@ class PelangganController extends Controller
                 : route('employee.pelanggan.store'),
             'cancelRoute' => route('employee.pelanggan.index'),
             'method' => $pelanggan ? 'PUT' : null,
-            'submitLabel' => $pelanggan ? 'Simpan perubahan' : 'Simpan data pengiriman',
+            'submitLabel' => $pelanggan ? 'Simpan perubahan' : 'Simpan data pelanggan',
         ]);
     }
 

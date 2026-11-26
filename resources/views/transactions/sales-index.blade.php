@@ -18,7 +18,7 @@
     <section class="table-panel">
         <div class="table-scroll">
             <table>
-                <thead><tr><th>Tanggal</th><th>ID</th><th>Pelanggan</th><th>Pegawai</th><th>Total</th><th></th></tr></thead>
+                <thead><tr><th>Tanggal</th><th>ID</th><th>Pelanggan</th><th>Pegawai</th><th>Total</th><th class="actions-heading">Aksi</th></tr></thead>
                 <tbody>
                     @forelse ($transactions as $transaction)
                         <tr>
@@ -27,7 +27,9 @@
                             <td>{{ $transaction->pelanggan->nama_pelanggan }}</td>
                             <td>{{ $transaction->pegawai->nama_pegawai }}</td>
                             <td>Rp {{ number_format((float) $transaction->total, 0, ',', '.') }}</td>
-                            <td><a class="text-link" href="{{ route('employee.penjualan.show', $transaction) }}">Detail</a></td>
+                            <td class="row-actions">
+                                <a class="text-link" href="{{ route('employee.penjualan.show', $transaction) }}">Detail</a>
+                            </td>
                         </tr>
                     @empty
                         <tr><td class="empty-cell" colspan="6">Belum ada transaksi penjualan.</td></tr>

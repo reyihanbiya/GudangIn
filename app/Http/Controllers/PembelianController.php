@@ -34,6 +34,50 @@ class PembelianController extends Controller
         return view('transactions.purchase-index', compact('transactions'));
     }
 
+    public function details(Request $request): View
+    {
+        $filters = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+        ]);
+        $filters = [
+            'from' => $filters['from'] ?? null,
+            'to' => $filters['to'] ?? null,
+        ];
+
+        if ($filters['from'] && $filters['to'] && $filters['to'] < $filters['from']) {
+            throw ValidationException::withMessages([
+                'to' => 'Tanggal akhir tidak boleh sebelum tanggal awal.',
+            ]);
+        }
+
+        $details = DB::table('detail_pembelian as detail')
+            ->join('pembelian as purchase', 'purchase.id_pembelian', '=', 'detail.id_pembelian')
+            ->join('supplier', 'supplier.id_supplier', '=', 'purchase.id_supplier')
+            ->join('persediaan', 'persediaan.id_persediaan', '=', 'detail.id_persediaan')
+            ->when($filters['from'], fn ($query, string $date) => $query->whereDate('purchase.tanggal', '>=', $date))
+            ->when($filters['to'], fn ($query, string $date) => $query->whereDate('purchase.tanggal', '<=', $date))
+            ->select([
+                'purchase.tanggal',
+                'purchase.id_pembelian',
+                'supplier.nama_supplier',
+                'persediaan.nama_barang',
+                'detail.satuan',
+                'detail.jumlah_barang',
+                'detail.harga_beli',
+                'detail.subtotal',
+            ])
+            ->orderByDesc('purchase.tanggal')
+            ->orderByDesc('purchase.id_pembelian')
+            ->paginate(20)
+            ->withQueryString();
+
+        return view('transactions.purchase-details', [
+            'details' => $details,
+            'filters' => $filters,
+        ]);
+    }
+
     public function create(): View
     {
         return view('transactions.form', [
@@ -42,7 +86,6 @@ class PembelianController extends Controller
             'counterparts' => Supplier::query()->orderBy('nama_supplier')->get(),
             'products' => Persediaan::query()->orderBy('nama_barang')->get(),
             'date' => today()->toDateString(),
-            'showStatus' => true,
         ]);
     }
 
@@ -52,7 +95,7 @@ class PembelianController extends Controller
         $transaction = $this->savePurchase($data, Auth::guard('employee')->user());
 
         return redirect()
-            ->route('employee.pembelian.show', $transaction)
+            ->route('employee.pembelian.index')
             ->with('status', 'Transaksi pembelian berhasil disimpan.');
     }
 
@@ -88,7 +131,7 @@ class PembelianController extends Controller
         $request->session()->forget($draftKey);
 
         return redirect()
-            ->route('employee.pembelian.show', $transaction)
+            ->route('employee.pembelian.index')
             ->with('status', 'Pembelian dan hasil pemeriksaan OCR berhasil disimpan.');
     }
 
@@ -110,6 +153,120 @@ class PembelianController extends Controller
             'receipt' => $pembelian->notaPembelian,
             'backRoute' => route('employee.pembelian.index'),
         ]);
+    }
+
+    public function edit(Pembelian $pembelian): View
+    {
+        abort_if(
+            $pembelian->status_pengiriman !== 'Diproses',
+            404
+        );
+
+        $pembelian->load(['detailPembelian']);
+
+        return view('transactions.form', [
+            'type' => 'Pembelian',
+            'action' => route('employee.pembelian.update', $pembelian),
+            'counterparts' => Supplier::query()->orderBy('nama_supplier')->get(),
+            'products' => Persediaan::query()->orderBy('nama_barang')->get(),
+            'date' => $pembelian->tanggal,
+            'method' => 'PUT',
+            'submitLabel' => 'Simpan perubahan',
+            'oldTransaction' => $pembelian,
+        ]);
+    }
+
+    public function update(Request $request, Pembelian $pembelian): RedirectResponse
+    {
+        if ($pembelian->status_pengiriman !== 'Diproses') {
+            throw ValidationException::withMessages([
+                'status_pengiriman' => 'Pembelian yang sudah diterima tidak dapat diubah.',
+            ]);
+        }
+
+        $data = $this->validateTransaction($request);
+        $data['status_pengiriman'] = $pembelian->status_pengiriman;
+
+        DB::transaction(function () use ($pembelian, $data): void {
+            $lockedPurchase = Pembelian::query()
+                ->where('id_pembelian', $pembelian->id_pembelian)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedPurchase->status_pengiriman !== 'Diproses') {
+                throw ValidationException::withMessages([
+                    'status_pengiriman' => 'Pembelian yang sudah diterima tidak dapat diubah.',
+                ]);
+            }
+
+            $lockedPurchase->update([
+                'id_supplier' => $data['id_supplier'],
+                'tanggal' => $data['tanggal'],
+            ]);
+
+            $lockedPurchase->detailPembelian()->delete();
+
+            foreach ($data['items'] as $item) {
+                $inventory = Persediaan::query()
+                    ->where('id_persediaan', $item['id_persediaan'])
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                DetailPembelian::query()->create([
+                    'id_pembelian' => $lockedPurchase->id_pembelian,
+                    'id_persediaan' => $inventory->id_persediaan,
+                    'satuan' => filled($item['satuan'] ?? null) ? trim((string) $item['satuan']) : $inventory->satuan,
+                    'harga_beli' => $item['harga_beli'],
+                    'jumlah_barang' => $item['jumlah_barang'],
+                ]);
+            }
+        });
+
+        return redirect()
+            ->route('employee.pembelian.index')
+            ->with('status', 'Pembelian berhasil diubah.');
+    }
+
+    public function destroy(Pembelian $pembelian): RedirectResponse
+    {
+        DB::transaction(function () use ($pembelian): void {
+            $lockedPurchase = Pembelian::query()
+                ->where('id_pembelian', $pembelian->id_pembelian)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $lockedPurchase->load('detailPembelian');
+
+            if ($lockedPurchase->status_pengiriman === 'Diterima') {
+                foreach ($lockedPurchase->detailPembelian as $detail) {
+                    $inventory = Persediaan::query()
+                        ->where('id_persediaan', $detail->id_persediaan)
+                        ->lockForUpdate()
+                        ->firstOrFail();
+
+                    if ((float) $inventory->stok < (float) $detail->jumlah_barang) {
+                        throw ValidationException::withMessages([
+                            'delete' => "Stok {$inventory->nama_barang} tidak mencukupi untuk menghapus pembelian ini.",
+                        ]);
+                    }
+
+                    $inventory->decrement('stok', $detail->jumlah_barang);
+                }
+            }
+
+            $receipt = $lockedPurchase->notaPembelian()->first();
+            if ($receipt) {
+                Storage::disk('local')->delete($receipt->file_path);
+            }
+
+            $lockedPurchase->detailPembelian()->delete();
+            $lockedPurchase->notaPembelian()->delete();
+            $lockedPurchase->delete();
+        });
+
+        return redirect()
+            ->route('employee.pembelian.index')
+            ->with('status', 'Pembelian berhasil dihapus.');
     }
 
     public function updateStatus(Request $request, Pembelian $pembelian): RedirectResponse
@@ -160,11 +317,11 @@ class PembelianController extends Controller
         $validator = Validator::make($request->all(), [
             'id_supplier' => ['required', 'string', 'exists:supplier,id_supplier'],
             'tanggal' => ['required', 'date'],
-            'status_pengiriman' => ['required', 'in:Diproses,Diterima'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.id_persediaan' => ['nullable', 'string', 'exists:persediaan,id_persediaan'],
             'items.*.jumlah_barang' => ['nullable', 'numeric', 'decimal:0,3', 'min:0.001', 'max:999999999999.999'],
             'items.*.harga_beli' => ['nullable', 'numeric', 'min:0.01', 'max:9999999999999.99'],
+            'items.*.satuan' => ['nullable', 'string', 'max:20'],
         ]);
 
         $validator->after(function ($validator) use ($request): void {
@@ -218,6 +375,7 @@ class PembelianController extends Controller
         });
 
         $data = $validator->validate();
+        $data['status_pengiriman'] = 'Diproses';
         $data['items'] = array_values(array_filter(
             $data['items'],
             fn (array $item) => filled($item['id_persediaan'] ?? null)
@@ -258,7 +416,7 @@ class PembelianController extends Controller
                 DetailPembelian::query()->create([
                     'id_pembelian' => $transaction->id_pembelian,
                     'id_persediaan' => $inventory->id_persediaan,
-                    'satuan' => $inventory->satuan,
+                    'satuan' => filled($item['satuan'] ?? null) ? trim((string) $item['satuan']) : $inventory->satuan,
                     'harga_beli' => $item['harga_beli'],
                     'jumlah_barang' => $item['jumlah_barang'],
                 ]);

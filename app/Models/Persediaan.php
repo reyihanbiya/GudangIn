@@ -22,6 +22,7 @@ class Persediaan extends Model
         'kategori_barang',
         'satuan',
         'stok',
+        'harga_jual',
     ];
 
     public function pegawai(): BelongsTo
@@ -42,6 +43,13 @@ class Persediaan extends Model
     public function getStokDenganSatuanAttribute(): string
     {
         return QuantityFormatter::format($this->stok).' '.$this->satuan;
+    }
+
+    public function getHargaJualFormatAttribute(): string
+    {
+        return $this->harga_jual === null
+            ? 'Belum diatur'
+            : 'Rp'.number_format((float) $this->harga_jual, 0, ',', '.');
     }
 
     /**

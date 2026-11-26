@@ -66,6 +66,34 @@ CREATE TABLE `detail_penjualan` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `xendit_payments`
+--
+
+CREATE TABLE `xendit_payments` (
+  `id` varchar(36) NOT NULL,
+  `reference_id` varchar(255) NOT NULL,
+  `payment_request_id` varchar(255) NOT NULL,
+  `payment_id` varchar(255) DEFAULT NULL,
+  `id_pelanggan` varchar(10) NOT NULL,
+  `id_pegawai` varchar(10) NOT NULL,
+  `id_penjualan` varchar(10) DEFAULT NULL,
+  `tanggal` date NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `items` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`items`)),
+  `qr_string` text NOT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'PENDING',
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `xendit_payments_reference_id_unique` (`reference_id`),
+  UNIQUE KEY `xendit_payments_payment_request_id_unique` (`payment_request_id`),
+  KEY `xendit_payments_id_pegawai_created_at_index` (`id_pegawai`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `jurnal_umum`
 --
 
@@ -146,7 +174,8 @@ CREATE TABLE `persediaan` (
   `id_pegawai` varchar(10) NOT NULL,
   `nama_barang` varchar(100) NOT NULL,
   `kategori_barang` varchar(50) DEFAULT NULL,
-  `stok` int(11) NOT NULL DEFAULT 0
+  `stok` int(11) NOT NULL DEFAULT 0,
+  `harga_jual` decimal(15,2) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------

@@ -17,6 +17,9 @@
             <a class="button button-secondary button-wide" href="{{ route('owner.login') }}">Masuk sebagai Owner</a>
             @if ($setupAvailable)
                 <p class="setup-hint">Pertama kali menggunakan GudangIn? <a href="{{ route('setup') }}">Buat akun awal</a></p>
+            @else
+                <a class="button button-secondary button-wide" href="{{ route('register') }}">Buat akun baru</a>
+                <p class="setup-hint">Akun Owner hanya bisa dibuat oleh Owner yang sudah masuk.</p>
             @endif
         </div>
     </section>

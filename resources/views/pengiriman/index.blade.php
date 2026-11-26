@@ -47,6 +47,8 @@
                             <td>{{ $transaction->id_penjualan }}</td>
                             <td>{{ $transaction->pelanggan?->nama_pelanggan ?? '—' }}</td>
                             <td class="row-actions">
+                                <a class="text-button" href="{{ route('employee.penjualan.delivery-note.preview', $transaction) }}" target="_blank">Lihat PDF</a>
+                                <a class="text-button" href="{{ route('employee.penjualan.delivery-note', $transaction) }}">Ekspor PDF</a>
                                 <a class="action-icon action-print" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;padding:0;border:0;border-radius:7px;background:transparent;color:#764c2d;text-decoration:none" href="{{ route('employee.pengiriman.pdf', $transaction) }}" target="_blank" aria-label="Cetak surat jalan" title="Cetak surat jalan">
                                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#764c2d" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                         <path d="M6 9V3h12v6M6 17H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />

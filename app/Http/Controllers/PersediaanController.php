@@ -41,37 +41,42 @@ class PersediaanController extends Controller
 
     public function index(Request $request): View
     {
-        $search = $request->validate([
+        $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
-        ])['search'] ?? null;
+            'category' => ['nullable', 'string', 'max:50'],
+        ]);
+        $search = $filters['search'] ?? null;
+        $category = $filters['category'] ?? null;
 
         $inventory = Persediaan::query()
             ->when($search, function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
-                    $query->where('nama_barang', 'like', "%{$search}%")
+                    $query->where('id_persediaan', 'like', "%{$search}%")
+                        ->orWhere('nama_barang', 'like', "%{$search}%")
                         ->orWhere('kategori_barang', 'like', "%{$search}%")
                         ->orWhere('satuan', 'like', "%{$search}%");
                 });
             })
+            ->when($category, fn ($query) => $query->where('kategori_barang', $category))
             ->orderBy('nama_barang')
             ->paginate(10)
             ->withQueryString();
 
-        return view('masters.index', [
-            'title' => 'Persediaan',
-            'description' => 'Kelola barang, satuan ukur, dan jumlah stok yang tersedia.',
-            'createRoute' => 'employee.persediaan.create',
-            'editRoute' => 'employee.persediaan.edit',
-            'deleteRoute' => 'employee.persediaan.destroy',
+        $categories = Persediaan::query()
+            ->whereNotNull('kategori_barang')
+            ->where('kategori_barang', '<>', '')
+            ->distinct()
+            ->orderBy('kategori_barang')
+            ->pluck('kategori_barang');
+
+        return view('masters.inventory', [
             'search' => $search,
-            'columns' => [
-                ['label' => 'ID', 'field' => 'id_persediaan'],
-                ['label' => 'Nama barang', 'field' => 'nama_barang'],
-                ['label' => 'Kategori', 'field' => 'kategori_barang'],
-                ['label' => 'Stok', 'field' => 'stok_dengan_satuan'],
-            ],
+            'category' => $category,
+            'categories' => $categories,
             'rows' => $inventory,
-            'stockCardRoute' => 'employee.persediaan.stock-card',
+            'totalItems' => Persediaan::query()->count(),
+            'outOfStockItems' => Persediaan::query()->where('stok', '<=', 0)->count(),
+            'unitTypes' => Persediaan::query()->distinct()->count('satuan'),
         ]);
     }
 
@@ -174,9 +179,10 @@ class PersediaanController extends Controller
                     'customOption' => true,
                     'help' => 'Stok, pembelian, dan penjualan barang ini akan selalu memakai satuan ini.',
                 ],
+                ['name' => 'harga_jual', 'label' => 'Harga jual', 'type' => 'number', 'required' => true, 'min' => 0.01, 'max' => 9999999999999.99, 'step' => '0.01'],
                 ['name' => 'stok', 'label' => 'Stok awal', 'type' => 'number', 'required' => true, 'min' => 0, 'step' => '0.001'],
             ],
-            'values' => $persediaan?->only(['nama_barang', 'kategori_barang', 'satuan', 'stok']) ?? ['satuan' => 'pcs', 'stok' => 0],
+            'values' => $persediaan?->only(['nama_barang', 'kategori_barang', 'satuan', 'harga_jual', 'stok']) ?? ['satuan' => 'pcs', 'harga_jual' => '', 'stok' => 0],
             'formAction' => $persediaan
                 ? route('employee.persediaan.update', $persediaan)
                 : route('employee.persediaan.store'),
@@ -193,6 +199,7 @@ class PersediaanController extends Controller
             'kategori_barang' => ['nullable', 'string', 'max:50'],
             'satuan' => ['required', 'string', Rule::in([...array_keys(self::INVENTORY_UNITS), self::CUSTOM_UNIT])],
             'satuan_custom' => ['nullable', 'required_if:satuan,'.self::CUSTOM_UNIT, 'string', 'max:20'],
+            'harga_jual' => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:9999999999999.99'],
             'stok' => ['required', 'numeric', 'decimal:0,3', 'min:0', 'max:999999999999.999'],
         ]);
 

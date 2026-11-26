@@ -78,6 +78,7 @@
                         value="{{ old($field['name'], $values[$field['name']] ?? '') }}"
                         @isset($field['maxlength']) maxlength="{{ $field['maxlength'] }}" @endisset
                         @isset($field['min']) min="{{ $field['min'] }}" @endisset
+                        @isset($field['max']) max="{{ $field['max'] }}" @endisset
                         @isset($field['step']) step="{{ $field['step'] }}" @endisset
                         @isset($field['placeholder']) placeholder="{{ $field['placeholder'] }}" @endisset
                         @required($field['required'])
