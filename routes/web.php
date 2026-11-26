@@ -15,6 +15,11 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReceiptOcrController;
 use App\Http\Controllers\SetupController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CartController;
+use App\Http\Controllers\CourierController;
+use App\Http\Controllers\CustomerOrderController;
+use App\Http\Controllers\PaymentReviewController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
@@ -28,6 +33,7 @@ Route::get('/login', [AuthController::class, 'employeeForm'])->name('login');
 Route::post('/login', [AuthController::class, 'employeeLogin'])
     ->middleware('throttle:5,1')
     ->name('login.store');
+
 Route::get('/register', [EmployeeRegistrationController::class, 'chooseRole'])->name('register');
 Route::get('/register/pegawai', [EmployeeRegistrationController::class, 'create'])->name('register.employee');
 Route::post('/register/pegawai', [EmployeeRegistrationController::class, 'store'])
@@ -37,6 +43,7 @@ Route::get('/register/owner', [OwnerRegistrationController::class, 'create'])->n
 Route::post('/register/owner', [OwnerRegistrationController::class, 'store'])
     ->middleware('throttle:5,1')
     ->name('register.owner.store');
+
 Route::get('/owner/login', [AuthController::class, 'ownerForm'])->name('owner.login');
 Route::post('/owner/login', [AuthController::class, 'ownerLogin'])
     ->middleware('throttle:5,1')
@@ -44,12 +51,50 @@ Route::post('/owner/login', [AuthController::class, 'ownerLogin'])
 
 Route::middleware('auth:employee')->prefix('employee')->name('employee.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'employee'])->name('dashboard');
+
     Route::get('/pengiriman', [PengirimanController::class, 'index'])->name('pengiriman.index');
+    Route::get('/pembayaran-pelanggan', [PaymentReviewController::class, 'index'])
+        ->name('payments.index');
+    Route::get('/pembayaran-pelanggan/{payment}/bukti', [PaymentReviewController::class, 'proof'])
+        ->name('payments.proof');
+    Route::post('/pembayaran-pelanggan/{payment}', [PaymentReviewController::class, 'update'])
+        ->name('payments.update');
+    Route::patch('/pembayaran-pelanggan/pesanan/{penjualan}/selesai', [PaymentReviewController::class, 'completePickup'])
+        ->name('payments.pickup.complete');
+    Route::get('/kurir', [CourierController::class, 'index'])->name('courier.index');
+    Route::post('/kurir/{penjualan}/ambil', [CourierController::class, 'claim'])
+        ->name('courier.claim');
+    Route::patch('/kurir/{penjualan}/status', [CourierController::class, 'updateStatus'])
+        ->name('courier.status');
+    Route::post('/kurir/{penjualan}/lokasi', [CourierController::class, 'updateLocation'])
+        ->middleware('throttle:30,1')
+        ->name('courier.location');
+    Route::get('/pengiriman/{penjualan}/edit', [PenjualanController::class, 'edit'])
+        ->name('pengiriman.edit');
+    Route::put('/pengiriman/{penjualan}', [PenjualanController::class, 'update'])
+        ->name('pengiriman.update');
+    Route::delete('/pengiriman/{penjualan}', [PenjualanController::class, 'destroy'])
+        ->name('pengiriman.destroy');
+    Route::get('/pengiriman/{penjualan}/pdf', [PengirimanController::class, 'exportPdf'])
+        ->name('pengiriman.pdf');
+
+    // Route cetak PDF data pengiriman pelanggan
+    Route::get('/pelanggan/{pelanggan}/pdf', [PelangganController::class, 'exportPdf'])
+        ->name('pelanggan.pdf');
+
+    // Data pelanggan / pengiriman
     Route::resource('pelanggan', PelangganController::class)->except(['show']);
+
+    // Persediaan
     Route::get('/persediaan/{persediaan}/kartu-stok', [PersediaanController::class, 'stockCard'])
         ->name('persediaan.stock-card');
+
     Route::resource('persediaan', PersediaanController::class)->except(['show']);
+
+    // Supplier
     Route::resource('supplier', SupplierController::class)->except(['show']);
+
+    // Penjualan
     Route::get('/penjualan', [PenjualanController::class, 'index'])->name('penjualan.index');
     Route::get('/penjualan/create', [PenjualanController::class, 'create'])->name('penjualan.create');
     Route::get('/penjualan/riwayat', [PenjualanController::class, 'history'])->name('penjualan.history');
@@ -69,8 +114,12 @@ Route::middleware('auth:employee')->prefix('employee')->name('employee.')->group
     Route::get('/penjualan/{penjualan}/surat-jalan', [PenjualanController::class, 'deliveryNote'])
         ->name('penjualan.delivery-note');
     Route::get('/penjualan/{penjualan}', [PenjualanController::class, 'show'])->name('penjualan.show');
+
+    // Pembelian
     Route::get('/pembelian', [PembelianController::class, 'index'])->name('pembelian.index');
     Route::get('/pembelian/create', [PembelianController::class, 'create'])->name('pembelian.create');
+
+    // OCR nota pembelian
     Route::get('/pembelian/ocr', [ReceiptOcrController::class, 'create'])->name('pembelian.ocr.create');
     Route::post('/pembelian/ocr', [ReceiptOcrController::class, 'process'])
         ->middleware('throttle:10,1')
@@ -80,28 +129,104 @@ Route::middleware('auth:employee')->prefix('employee')->name('employee.')->group
         ->name('pembelian.ocr.api');
     Route::get('/pembelian/ocr/{token}', [ReceiptOcrController::class, 'review'])
         ->name('pembelian.ocr.review');
+
     Route::post('/pembelian/ocr/{token}/discard', [ReceiptOcrController::class, 'discard'])
         ->name('pembelian.ocr.discard');
+
     Route::post('/pembelian/ocr/confirm', [PembelianController::class, 'storeFromOcr'])
         ->name('pembelian.ocr.store');
+
     Route::post('/pembelian', [PembelianController::class, 'store'])->name('pembelian.store');
     Route::get('/pembelian/detail', [PembelianController::class, 'details'])->name('pembelian.details');
+
     Route::get('/pembelian/{pembelian}/nota', [ReceiptOcrController::class, 'download'])
         ->name('pembelian.receipt.download');
+
     Route::patch('/pembelian/{pembelian}/status', [PembelianController::class, 'updateStatus'])
         ->name('pembelian.status');
-    Route::get('/pembelian/{pembelian}/edit', [PembelianController::class, 'edit'])->name('pembelian.edit');
-    Route::put('/pembelian/{pembelian}', [PembelianController::class, 'update'])->name('pembelian.update');
-    Route::delete('/pembelian/{pembelian}', [PembelianController::class, 'destroy'])->name('pembelian.destroy');
-    Route::get('/pembelian/{pembelian}', [PembelianController::class, 'show'])->name('pembelian.show');
+
+    Route::get('/pembelian/{pembelian}/edit', [PembelianController::class, 'edit'])
+        ->name('pembelian.edit');
+    Route::put('/pembelian/{pembelian}', [PembelianController::class, 'update'])
+        ->name('pembelian.update');
+    Route::delete('/pembelian/{pembelian}', [PembelianController::class, 'destroy'])
+        ->name('pembelian.destroy');
+    Route::get('/pembelian/{pembelian}', [PembelianController::class, 'show'])
+        ->name('pembelian.show');
+
+    // Logout employee
     Route::post('/logout', [AuthController::class, 'employeeLogout'])->name('logout');
 });
 
 Route::middleware('auth:owner')->prefix('owner')->name('owner.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'owner'])->name('dashboard');
+
     Route::get('/accounts', [OwnerAccountController::class, 'index'])->name('accounts.index');
     Route::post('/accounts', [OwnerAccountController::class, 'store'])->name('accounts.store');
+    Route::patch('/accounts/pegawai/{pegawai}/jabatan', [OwnerAccountController::class, 'updateEmployeeRole'])
+        ->name('accounts.employee-role');
+    Route::get('/pembayaran-pelanggan', [PaymentReviewController::class, 'index'])
+        ->name('payments.index');
+    Route::get('/pembayaran-pelanggan/{payment}/bukti', [PaymentReviewController::class, 'proof'])
+        ->name('payments.proof');
+    Route::post('/pembayaran-pelanggan/{payment}', [PaymentReviewController::class, 'update'])
+        ->name('payments.update');
+    Route::patch('/pembayaran-pelanggan/pesanan/{penjualan}/selesai', [PaymentReviewController::class, 'completePickup'])
+        ->name('payments.pickup.complete');
+
+    // Laporan owner
     Route::get('/reports/sales', [ReportController::class, 'sales'])->name('reports.sales');
     Route::get('/reports/purchases', [ReportController::class, 'purchases'])->name('reports.purchases');
+
+    // Logout owner
     Route::post('/logout', [AuthController::class, 'ownerLogout'])->name('logout');
 });
+
+// CUSTOMER
+Route::prefix('customer')
+    ->name('customer.')
+    ->group(function () {
+
+        // KATALOG PRODUK
+        Route::get('/', [CustomerController::class, 'index'])
+            ->name('products.index');
+
+        // DETAIL PRODUK
+        Route::get('/produk/{id_persediaan}', [CustomerController::class, 'show'])
+            ->name('products.show');
+
+        // KERANJANG
+        Route::get('/keranjang', [CartController::class, 'index'])
+            ->name('cart.index');
+
+        Route::post('/keranjang/tambah', [CartController::class, 'store'])
+            ->name('cart.store');
+
+        Route::patch('/keranjang/{id_persediaan}', [CartController::class, 'update'])
+            ->name('cart.update');
+
+        Route::delete('/keranjang/{id_persediaan}', [CartController::class, 'remove'])
+            ->name('cart.remove');
+
+        Route::delete('/keranjang', [CartController::class, 'clear'])
+            ->name('cart.clear');
+
+        Route::get('/checkout', [CustomerOrderController::class, 'checkout'])
+            ->name('checkout');
+        Route::post('/checkout', [CustomerOrderController::class, 'store'])
+            ->middleware('throttle:10,1')
+            ->name('checkout.store');
+        Route::get('/lacak', [CustomerOrderController::class, 'tracking'])
+            ->name('tracking.index');
+        Route::post('/lacak', [CustomerOrderController::class, 'lookup'])
+            ->middleware('throttle:10,1')
+            ->name('tracking.lookup');
+        Route::get('/pesanan/{penjualan}', [CustomerOrderController::class, 'show'])
+            ->name('orders.show');
+        Route::post('/pesanan/{penjualan}/bukti', [CustomerOrderController::class, 'uploadProof'])
+            ->middleware('throttle:5,1')
+            ->name('orders.proof');
+        Route::get('/pesanan/{penjualan}/lokasi-kurir', [CustomerOrderController::class, 'courierLocation'])
+            ->middleware('throttle:20,1')
+            ->name('orders.courier-location');
+    });

@@ -52,6 +52,16 @@
                         <span class="cashier-nav-icon" aria-hidden="true"><svg data-icon="delivery" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6h12v11h-12zM14.5 10h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M4.5 9h5M2.5 12h7"/></svg></span>
                         Pengiriman
                     </a>
+                    <a class="{{ request()->routeIs('employee.payments.*') ? 'active' : '' }}" href="{{ route('employee.payments.index') }}">
+                        <span class="cashier-nav-icon" aria-hidden="true">Rp</span>
+                        Pembayaran pelanggan
+                    </a>
+                    @if (mb_strtolower(trim((string) auth()->guard('employee')->user()->jabatan)) === 'kurir')
+                        <a class="{{ request()->routeIs('employee.courier.*') ? 'active' : '' }}" href="{{ route('employee.courier.index') }}">
+                            <span class="cashier-nav-icon" aria-hidden="true">⌖</span>
+                            Halaman kurir
+                        </a>
+                    @endif
                     <a class="{{ request()->routeIs('employee.supplier.*') ? 'active' : '' }}" href="{{ route('employee.supplier.index') }}">
                         <span class="cashier-nav-icon" aria-hidden="true"><svg data-icon="supplier" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9 5 4h14l2 5M3 9h18M4 9v11h16V9M2.5 20h19"/><path d="M8 20v-6h8v6M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/></svg></span>
                         Supplier
@@ -64,6 +74,10 @@
                     <a class="{{ request()->routeIs('owner.accounts.*') ? 'active' : '' }}" href="{{ route('owner.accounts.index') }}">
                         <span class="cashier-nav-icon" aria-hidden="true"><svg data-icon="accounts" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></span>
                         Akun Owner
+                    </a>
+                    <a class="{{ request()->routeIs('owner.payments.*') ? 'active' : '' }}" href="{{ route('owner.payments.index') }}">
+                        <span class="cashier-nav-icon" aria-hidden="true">Rp</span>
+                        Verifikasi pembayaran
                     </a>
                     <a class="{{ request()->routeIs('owner.reports.sales') ? 'active' : '' }}" href="{{ route('owner.reports.sales') }}">
                         <span class="cashier-nav-icon" aria-hidden="true"><svg data-icon="receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h12v17l-3-1.8-3 1.8-3-1.8-3 1.8v-17Z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span>

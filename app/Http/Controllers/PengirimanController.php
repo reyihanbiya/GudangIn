@@ -3,19 +3,46 @@
 namespace App\Http\Controllers;
 
 use App\Models\Penjualan;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class PengirimanController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $deliveries = Penjualan::query()
+        $search = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+        ])['search'] ?? null;
+
+        $transactions = Penjualan::query()
             ->with('pelanggan')
-            ->withCount('detailPenjualan')
+            ->when($search, function ($query, string $search): void {
+                $query->where(function ($query) use ($search): void {
+                    $query->where('id_pengiriman', 'like', "%{$search}%")
+                        ->orWhere('id_penjualan', 'like', "%{$search}%")
+                        ->orWhereHas('pelanggan', function ($query) use ($search): void {
+                            $query->where('nama_pelanggan', 'like', "%{$search}%")
+                                ->orWhere('no_hp', 'like', "%{$search}%");
+                        });
+                });
+            })
             ->orderByDesc('tanggal')
             ->orderByDesc('id_penjualan')
-            ->paginate(15);
+            ->paginate(10)
+            ->withQueryString();
 
-        return view('transactions.delivery-index', compact('deliveries'));
+        return view('pengiriman.index', compact('transactions', 'search'));
+    }
+
+    public function exportPdf(Penjualan $penjualan)
+    {
+        $penjualan->load(['pelanggan', 'detailPenjualan.persediaan']);
+
+        $pdf = Pdf::loadView('transactions.delivery-note', [
+            'penjualan' => $penjualan,
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->download('pengiriman-' . $penjualan->id_pengiriman . '.pdf');
     }
 }

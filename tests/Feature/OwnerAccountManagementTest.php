@@ -82,4 +82,34 @@ class OwnerAccountManagementTest extends TestCase
             ->get(route('owner.accounts.index'))
             ->assertRedirect('/owner/login');
     }
+
+    public function test_owner_can_assign_the_courier_role_to_an_employee(): void
+    {
+        $owner = Owner::query()->create([
+            'nama_owner' => 'Owner Utama',
+            'username' => 'owner-utama',
+            'password' => 'password-lama',
+        ]);
+        $employee = Pegawai::query()->create([
+            'id_pegawai' => 'PGW0001',
+            'nama_pegawai' => 'Pegawai Uji',
+            'username' => 'pegawai-uji',
+            'password' => 'password-lama',
+            'jabatan' => 'Pegawai',
+        ]);
+
+        $this->actingAs($owner, 'owner')
+            ->patch(route('owner.accounts.employee-role', $employee), ['jabatan' => 'Kurir'])
+            ->assertRedirect(route('owner.accounts.index'));
+
+        $this->assertDatabaseHas('pegawai', [
+            'id_pegawai' => $employee->id_pegawai,
+            'jabatan' => 'Kurir',
+        ]);
+
+        $this->actingAs($owner, 'owner')
+            ->get(route('owner.accounts.index'))
+            ->assertOk()
+            ->assertSee('Kurir');
+    }
 }

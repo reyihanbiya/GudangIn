@@ -66,6 +66,9 @@ class MasterDataTest extends TestCase
             ->assertSee('Nama pelanggan')
             ->assertSee('No. telepon')
             ->assertSee('Alamat')
+            ->assertSee('action-print', false)
+            ->assertSee('action-edit', false)
+            ->assertSee('action-delete', false)
             ->assertDontSee('<th>ID</th>', false);
     }
 

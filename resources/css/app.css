@@ -133,16 +133,23 @@ td { color: #514337; }
 .actions-heading { min-width: 180px; }
 .row-actions { display: flex; align-items: center; gap: 13px; white-space: nowrap; }
 .row-actions form { margin: 0; }
-<<<<<<< HEAD
+.action-icon { width: 32px; height: 32px; flex: 0 0 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 7px; background: transparent; cursor: pointer; text-decoration: none; transition: background .15s, transform .15s; }
+.action-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.action-icon:hover { transform: translateY(-1px); }
+.action-icon:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.action-print { color: #764c2d; }
+.action-print:hover { background: #f6f0eb; }
+.action-edit { color: #23824a; }
+.action-edit:hover { background: #e8f4ec; }
+.action-delete { color: #a13d31; }
+.action-delete:hover { background: #fff0ed; }
 .transaction-action-button { min-height: 32px; padding: 0 10px; font-size: 11px; }
-=======
 .purchase-detail-actions {
     position: fixed;
     right: 24px;
     bottom: 68px;
     z-index: 20;
 }
->>>>>>> origin/main
 .text-button { padding: 0; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .text-danger { color: #a13d31; }
 .empty-cell { padding: 38px 16px; color: #82766b; text-align: center; }
