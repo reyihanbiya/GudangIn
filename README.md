@@ -14,7 +14,7 @@ GudangIn adalah aplikasi web POS dan persediaan untuk toko bangunan, dibuat deng
    npm install
    ```
 
-5. Jalankan migrasi untuk membuat tabel pendukung Laravel, sequence ID, dan pembayaran Xendit:
+5. Jalankan migrasi untuk membuat tabel pendukung Laravel, sequence ID, pembayaran, dan pelacakan:
 
    ```powershell
    php artisan migrate
@@ -22,16 +22,19 @@ GudangIn adalah aplikasi web POS dan persediaan untuk toko bangunan, dibuat deng
 
    Barang lama mendapat satuan sementara `unit`; sesuaikan satuannya melalui menu **Persediaan** sebelum melanjutkan input transaksi.
 
-6. Checkout berjalan dalam **mode simulasi** secara default (`XENDIT_SIMULATION=true`): QR hanya contoh, tidak ada permintaan atau pembayaran sungguhan ke Xendit, dan transaksi baru dicatat setelah tombol **Bayar (Simulasi)** ditekan. Untuk mengaktifkan integrasi Xendit sungguhan secara eksplisit, ubah flag menjadi `XENDIT_SIMULATION=false`, isi `XENDIT_SECRET_KEY` dan `XENDIT_WEBHOOK_TOKEN`, lalu daftarkan URL webhook `https://alamat-aplikasi/api/xendit/webhook` pada dashboard Xendit untuk event `payment.capture`, `payment.failure`, dan `payment_request.expiry`. Gunakan secret key test saat pengembangan.
+6. Checkout QRIS untuk kasir tetap menggunakan Xendit dan **mode simulasi** secara default (`XENDIT_SIMULATION=true`). Untuk Xendit live, ubah flag menjadi `false`, isi `XENDIT_SECRET_KEY` dan `XENDIT_WEBHOOK_TOKEN`, lalu daftarkan URL `https://alamat-aplikasi/api/xendit/webhook` untuk event `payment.capture`, `payment.failure`, dan `payment_request.expiry`.
+7. Pesanan customer mendukung transfer manual, pembayaran tunai di toko, COD, serta QRIS/transfer otomatis melalui Midtrans. Buat akun Midtrans, salin Server Key dan Client Key dari dashboard (gunakan kredensial Sandbox saat pengembangan), lalu isi `MIDTRANS_SERVER_KEY`, `MIDTRANS_CLIENT_KEY`, dan `MIDTRANS_IS_PRODUCTION=false`. Daftarkan `https://alamat-aplikasi/api/midtrans/notification` sebagai Payment Notification URL. Tanpa Server Key, pilihan QRIS/transfer otomatis tidak ditampilkan; transfer manual tetap tersedia. Atur `STORE_BANK_NAME`, `STORE_BANK_ACCOUNT`, `STORE_BANK_HOLDER`, dan `STORE_DELIVERY_FEE` sesuai kebijakan toko.
+8. Untuk peta, aktifkan Google Maps JavaScript API dan Places API di Google Cloud, buat API key, batasi key berdasarkan HTTP referrer/domain, lalu isi `GOOGLE_MAPS_API_KEY`, `STORE_LATITUDE`, dan `STORE_LONGITUDE`. Koordinat toko dipakai sebagai titik awal peta/rute. Tanpa key, alamat pengiriman tetap dapat dimasukkan manual; pemilihan pin dan pelacakan peta memerlukan key tersebut.
+9. Owner dapat mengubah jabatan Pegawai menjadi **Kurir** melalui menu **Akun Owner**. Kurir memakai akun Pegawai yang sama; browser perlu izin lokasi dan aplikasi harus diakses melalui HTTPS (localhost diizinkan browser untuk pengembangan).
 
-7. Jalankan aplikasi dan aset frontend:
+10. Jalankan aplikasi dan aset frontend:
 
    ```powershell
    composer run dev
    ```
 
    Script ini menjalankan Laravel, worker antrean, dan Vite. Pail tidak dijalankan karena membutuhkan ekstensi `pcntl` yang tidak tersedia pada Windows.
-8. Buka [http://127.0.0.1:8000](http://127.0.0.1:8000). Pada penggunaan pertama, halaman akan meminta pembuatan satu atau lebih akun Owner dan Pegawai.
+11. Buka [http://127.0.0.1:8000](http://127.0.0.1:8000). Pada penggunaan pertama, halaman akan meminta pembuatan satu atau lebih akun Owner dan Pegawai.
 
 Biarkan terminal tetap terbuka selama aplikasi digunakan. Halaman penyiapan hanya tersedia sebelum akun pertama dibuat.
 
@@ -47,6 +50,8 @@ Biarkan terminal tetap terbuka selama aplikasi digunakan. Halaman penyiapan hany
 - Kartu stok untuk melihat transaksi barang masuk dan keluar.
 - Transaksi penjualan dengan validasi stok dan pengurangan stok otomatis.
 - Checkout QRIS dalam mode simulasi lokal secara default, atau melalui Xendit jika integrasi live diaktifkan secara eksplisit.
+- Katalog dan checkout customer yang terhubung ke persediaan, transfer manual dengan bukti privat dan verifikasi Owner/Pegawai, tunai di toko, COD, serta pembayaran Midtrans QRIS/VA dengan webhook bertanda tangan.
+- Pelacakan pesanan tanpa login menggunakan kode pesanan dan nomor WhatsApp, riwayat status/pembayaran, pilihan lokasi melalui Google Maps, serta pembaruan GPS kurir saat pesanan dalam perjalanan.
 - Transaksi pembelian dengan stok bertambah setelah barang diterima.
 - Laporan penjualan dan pembelian dengan filter rentang tanggal untuk Owner.
 - OCR nota pembelian lokal, hasilnya dapat diperiksa sebelum transaksi disimpan.

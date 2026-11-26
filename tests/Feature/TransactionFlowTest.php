@@ -46,6 +46,8 @@ class TransactionFlowTest extends TestCase
             $table->string('nama_pelanggan', 100);
             $table->string('alamat', 255)->nullable();
             $table->string('no_hp', 20)->nullable();
+            $table->decimal('latitude', 10, 7)->nullable();
+            $table->decimal('longitude', 10, 7)->nullable();
         });
 
         Schema::create('supplier', function (Blueprint $table): void {
@@ -71,6 +73,17 @@ class TransactionFlowTest extends TestCase
             $table->string('id_pelanggan', 10);
             $table->string('id_pegawai', 10);
             $table->date('tanggal');
+            $table->string('jenis_pengiriman', 20)->default('pengiriman');
+            $table->string('status_pengiriman', 30)->default('SELESAI');
+            $table->string('status_pembayaran', 30)->default('TERBAYAR');
+            $table->string('metode_pembayaran', 30)->nullable();
+            $table->string('alamat_pengiriman', 500)->nullable();
+            $table->string('nama_penerima', 100)->nullable();
+            $table->string('telepon_penerima', 20)->nullable();
+            $table->decimal('latitude_pengiriman', 10, 7)->nullable();
+            $table->decimal('longitude_pengiriman', 10, 7)->nullable();
+            $table->decimal('biaya_pengiriman', 15, 2)->default(0);
+            $table->string('id_kurir', 10)->nullable();
         });
 
         Schema::create('detail_penjualan', function (Blueprint $table): void {
@@ -903,6 +916,245 @@ class TransactionFlowTest extends TestCase
             'payment_id' => 'py_late_capture',
         ]);
         $this->assertDatabaseCount('penjualan', 0);
+    }
+
+    public function test_customer_checkout_uploads_private_transfer_proof_and_verifies_without_second_stock_change(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        session(['customer_cart' => [$this->product->id_persediaan => 2]]);
+        $this->get(route('customer.checkout'))->assertOk()->assertSee('Transfer bank manual');
+
+        $response = $this->post(route('customer.checkout.store'), [
+            'nama_pelanggan' => 'Pembeli Online',
+            'no_hp' => '+62 812-3456-7890',
+            'jenis_pengiriman' => 'pengiriman',
+            'alamat' => 'Jl. Contoh No. 12',
+            'latitude' => '-6.2000000',
+            'longitude' => '106.8166667',
+            'metode_pembayaran' => 'bank_transfer',
+        ]);
+
+        $sale = Penjualan::query()->firstOrFail();
+        $payment = \App\Models\CustomerPayment::query()->firstOrFail();
+        $response->assertRedirect(route('customer.orders.show', $sale));
+        $this->assertSame('AWAITING_PAYMENT', $payment->status);
+        $this->assertSame('6281234567890', $sale->telepon_penerima);
+        $this->assertEquals(-6.2, (float) $sale->latitude_pengiriman);
+        $this->get(route('customer.orders.show', $sale))
+            ->assertOk()
+            ->assertSee($sale->id_penjualan)
+            ->assertSee('Transfer bank');
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 3,
+        ]);
+
+        $this->post(route('customer.orders.proof', $sale), [
+            'bukti_pembayaran' => UploadedFile::fake()->createWithContent(
+                'transfer.pdf',
+                '%PDF-1.4 sample transfer receipt'
+            ),
+        ])->assertRedirect();
+
+        $payment->refresh();
+        $this->assertSame('AWAITING_VERIFICATION', $payment->status);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertExists($payment->proof_path);
+
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.payments.index'))
+            ->assertOk()
+            ->assertSee('Verifikasi pembayaran');
+        $this->actingAs($this->employee, 'employee')
+            ->post(route('employee.payments.update', $payment), ['action' => 'approve'])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('customer_payments', [
+            'id' => $payment->id,
+            'status' => 'PAID',
+            'verified_by_type' => 'employee',
+        ]);
+        $this->assertDatabaseHas('penjualan', [
+            'id_penjualan' => $sale->id_penjualan,
+            'status_pembayaran' => 'TERBAYAR',
+        ]);
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 3,
+        ]);
+    }
+
+    public function test_midtrans_webhook_is_signature_checked_and_idempotent_for_customer_orders(): void
+    {
+        config([
+            'services.midtrans.server_key' => 'midtrans-test-secret',
+            'services.midtrans.is_production' => false,
+        ]);
+        Http::fake([
+            'https://app.sandbox.midtrans.com/snap/v1/transactions' => Http::response([
+                'token' => 'snap-token',
+                'redirect_url' => 'https://app.sandbox.midtrans.com/snap/v2/vtweb/snap-token',
+            ]),
+        ]);
+        session(['customer_cart' => [$this->product->id_persediaan => 2]]);
+
+        $response = $this->post(route('customer.checkout.store'), [
+            'nama_pelanggan' => 'Pembeli Online',
+            'no_hp' => '081234567890',
+            'jenis_pengiriman' => 'ambil_di_toko',
+            'metode_pembayaran' => 'qris',
+        ]);
+
+        $sale = Penjualan::query()->firstOrFail();
+        $payment = \App\Models\CustomerPayment::query()->firstOrFail();
+        $response->assertRedirect(route('customer.orders.show', $sale));
+        $this->assertSame('https://app.sandbox.midtrans.com/snap/v2/vtweb/snap-token', $payment->checkout_url);
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 3,
+        ]);
+        $this->actingAs($this->employee, 'employee')
+            ->post(route('employee.payments.update', $payment), ['action' => 'approve'])
+            ->assertSessionHasErrors('payment');
+        $this->assertDatabaseHas('customer_payments', [
+            'id' => $payment->id,
+            'status' => 'PENDING',
+        ]);
+
+        $payload = [
+            'order_id' => $payment->provider_order_id,
+            'status_code' => '200',
+            'gross_amount' => (string) $payment->amount,
+            'transaction_status' => 'settlement',
+            'transaction_id' => 'midtrans-tx-1',
+        ];
+        $payload['signature_key'] = hash(
+            'sha512',
+            $payload['order_id'].$payload['status_code'].$payload['gross_amount'].'midtrans-test-secret'
+        );
+
+        $this->postJson(route('midtrans.notification'), array_merge($payload, [
+            'signature_key' => 'invalid',
+        ]))->assertUnauthorized();
+        $this->assertDatabaseHas('customer_payments', [
+            'id' => $payment->id,
+            'status' => 'PENDING',
+        ]);
+
+        $this->postJson(route('midtrans.notification'), $payload)->assertOk();
+        $this->postJson(route('midtrans.notification'), $payload)->assertOk();
+        $this->assertDatabaseHas('customer_payments', [
+            'id' => $payment->id,
+            'status' => 'PAID',
+            'provider_transaction_id' => 'midtrans-tx-1',
+        ]);
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 3,
+        ]);
+        $this->assertSame(1, $payment->events()->where('status', 'PAID')->count());
+    }
+
+    public function test_failed_midtrans_checkout_restores_reserved_stock_only_once(): void
+    {
+        config([
+            'services.midtrans.server_key' => 'midtrans-test-secret',
+            'services.midtrans.is_production' => false,
+        ]);
+        Http::fake([
+            'https://app.sandbox.midtrans.com/snap/v1/transactions' => Http::response([
+                'message' => 'Invalid transaction',
+            ], 500),
+        ]);
+        session(['customer_cart' => [$this->product->id_persediaan => 2]]);
+
+        $this->post(route('customer.checkout.store'), [
+            'nama_pelanggan' => 'Pembeli Online',
+            'no_hp' => '081234567890',
+            'jenis_pengiriman' => 'ambil_di_toko',
+            'metode_pembayaran' => 'transfer_gateway',
+        ])->assertSessionHasErrors('payment');
+
+        $payment = \App\Models\CustomerPayment::query()->firstOrFail();
+        $this->assertDatabaseHas('customer_payments', [
+            'id' => $payment->id,
+            'status' => 'FAILED',
+        ]);
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 5,
+        ]);
+
+        $payload = [
+            'order_id' => $payment->provider_order_id,
+            'status_code' => '202',
+            'gross_amount' => (string) $payment->amount,
+            'transaction_status' => 'expire',
+        ];
+        $payload['signature_key'] = hash(
+            'sha512',
+            $payload['order_id'].$payload['status_code'].$payload['gross_amount'].'midtrans-test-secret'
+        );
+        $this->postJson(route('midtrans.notification'), $payload)->assertOk();
+
+        $this->assertDatabaseHas('customer_payments', [
+            'id' => $payment->id,
+            'status' => 'FAILED',
+        ]);
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 5,
+        ]);
+    }
+
+    public function test_customer_can_track_by_order_code_and_phone_and_courier_location_is_private(): void
+    {
+        $this->employee->update(['jabatan' => 'Kurir']);
+        session(['customer_cart' => [$this->product->id_persediaan => 1]]);
+
+        $this->post(route('customer.checkout.store'), [
+            'nama_pelanggan' => 'Pembeli Online',
+            'no_hp' => '081234567890',
+            'jenis_pengiriman' => 'pengiriman',
+            'alamat' => 'Jl. Contoh No. 12',
+            'latitude' => '-6.2',
+            'longitude' => '106.8',
+            'metode_pembayaran' => 'cod',
+        ])->assertRedirect();
+        $sale = Penjualan::query()->firstOrFail();
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.courier.index'))
+            ->assertOk()
+            ->assertSee($sale->id_penjualan);
+
+        $this->post(route('customer.tracking.lookup'), [
+            'kode_pesanan' => $sale->id_penjualan,
+            'no_hp' => '081234567891',
+        ])->assertSessionHasErrors('kode_pesanan');
+        $this->post(route('customer.tracking.lookup'), [
+            'kode_pesanan' => $sale->id_pengiriman,
+            'no_hp' => '+62 812 3456 7890',
+        ])->assertRedirect(route('customer.orders.show', $sale));
+
+        $this->actingAs($this->employee, 'employee')
+            ->post(route('employee.courier.claim', $sale))
+            ->assertRedirect();
+        $this->actingAs($this->employee, 'employee')
+            ->patch(route('employee.courier.status', $sale), ['status_pengiriman' => 'DALAM_PENGIRIMAN'])
+            ->assertRedirect();
+        $this->actingAs($this->employee, 'employee')
+            ->postJson(route('employee.courier.location', $sale), [
+                'latitude' => '-6.2012345',
+                'longitude' => '106.8123456',
+            ])->assertOk();
+
+        $this->getJson(route('customer.orders.courier-location', $sale))
+            ->assertOk()
+            ->assertJsonPath('status', 'DALAM_PENGIRIMAN')
+            ->assertJsonPath('location.latitude', -6.2012345);
+        $this->assertDatabaseHas('courier_locations', [
+            'id_penjualan' => $sale->id_penjualan,
+            'id_kurir' => $this->employee->id_pegawai,
+        ]);
     }
 
     private function fakeXenditPayment(): void

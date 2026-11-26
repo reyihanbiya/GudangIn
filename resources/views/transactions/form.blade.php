@@ -57,9 +57,6 @@
             <p class="lead">
                 @if ($isEditing)
                     Transaksi {{ $transaction->id_penjualan ?? $transaction->id_pembelian }}.
-                    @if ($type === 'Penjualan' && filled($transaction->id_pengiriman))
-                        ID pengiriman {{ $transaction->id_pengiriman }}.
-                    @endif
                     Stok akan diperbarui sesuai perubahan yang disimpan.
                 @else
                     Isi rincian dengan benar.

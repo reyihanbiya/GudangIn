@@ -45,5 +45,21 @@ return [
         'webhook_token' => env('XENDIT_WEBHOOK_TOKEN'),
         'api_url' => env('XENDIT_API_URL', 'https://api.xendit.co'),
     ],
+    'midtrans' => [
+        'server_key' => env('MIDTRANS_SERVER_KEY'),
+        'client_key' => env('MIDTRANS_CLIENT_KEY'),
+        'is_production' => env('MIDTRANS_IS_PRODUCTION', false),
+    ],
+    'google_maps' => [
+        'api_key' => env('GOOGLE_MAPS_API_KEY'),
+        'store_latitude' => env('STORE_LATITUDE'),
+        'store_longitude' => env('STORE_LONGITUDE'),
+    ],
+    'customer_store' => [
+        'delivery_fee' => env('STORE_DELIVERY_FEE', 0),
+        'bank_name' => env('STORE_BANK_NAME'),
+        'bank_account' => env('STORE_BANK_ACCOUNT'),
+        'bank_holder' => env('STORE_BANK_HOLDER'),
+    ],
 
 ];

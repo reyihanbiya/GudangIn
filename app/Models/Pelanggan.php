@@ -18,6 +18,8 @@ class Pelanggan extends Model
         'nama_pelanggan',
         'alamat',
         'no_hp',
+        'latitude',
+        'longitude',
     ];
 
     public function penjualan(): HasMany

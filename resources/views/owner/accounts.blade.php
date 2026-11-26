@@ -40,4 +40,40 @@
             </div>
         </div>
     </section>
+
+    <section class="table-panel account-list-panel">
+        <div class="account-list-section">
+            <h2>Akses Pegawai dan Kurir</h2>
+            <p class="lead">Peran Kurir memberi akses ke halaman penugasan dan pembaruan lokasi pengiriman.</p>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr><th>Nama Pegawai</th><th>Username</th><th>Peran</th></tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($employees as $employee)
+                            <tr>
+                                <td>{{ $employee->nama_pegawai }}</td>
+                                <td>{{ $employee->username }}</td>
+                                <td>
+                                    <form method="POST" action="{{ route('owner.accounts.employee-role', $employee) }}">
+                                        @csrf
+                                        @method('PATCH')
+                                        <select name="jabatan" aria-label="Peran {{ $employee->nama_pegawai }}">
+                                            @foreach (['Pegawai', 'Kasir', 'Kurir'] as $role)
+                                                <option value="{{ $role }}" @selected($employee->jabatan === $role)>{{ $role }}</option>
+                                            @endforeach
+                                        </select>
+                                        <button class="button button-secondary" type="submit">Simpan peran</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td class="empty-cell" colspan="3">Belum ada akun Pegawai.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
 @endsection

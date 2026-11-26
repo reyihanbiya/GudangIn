@@ -19,6 +19,9 @@ class DatabaseReadiness
         'nota_pembelian',
         'sys_sequences',
         'xendit_payments',
+        'customer_payments',
+        'order_events',
+        'courier_locations',
     ];
 
     private const REQUIRED_VIEWS = [

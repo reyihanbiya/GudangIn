@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Owner;
+use App\Models\Pegawai;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -16,7 +17,23 @@ class OwnerAccountController extends Controller
             'owners' => Owner::query()
                 ->orderBy('nama_owner')
                 ->get(['id_owner', 'nama_owner', 'username']),
+            'employees' => Pegawai::query()
+                ->orderBy('nama_pegawai')
+                ->get(['id_pegawai', 'nama_pegawai', 'username', 'jabatan']),
         ]);
+    }
+
+    public function updateEmployeeRole(Request $request, Pegawai $pegawai): RedirectResponse
+    {
+        $data = $request->validate([
+            'jabatan' => ['required', 'in:Pegawai,Kasir,Kurir'],
+        ]);
+
+        $pegawai->update($data);
+
+        return redirect()
+            ->route('owner.accounts.index')
+            ->with('status', 'Peran pegawai berhasil diperbarui.');
     }
 
     public function store(Request $request): RedirectResponse
