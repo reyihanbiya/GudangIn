@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\Pegawai;
 use App\Models\DetailPenjualan;
+use App\Models\Pegawai;
 use App\Models\Pelanggan;
 use App\Models\Pembelian;
 use App\Models\Penjualan;
@@ -13,11 +13,12 @@ use App\Models\XenditPayment;
 use App\Services\ReceiptOcrService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class TransactionFlowTest extends TestCase
@@ -25,8 +26,11 @@ class TransactionFlowTest extends TestCase
     use RefreshDatabase;
 
     private Pegawai $employee;
+
     private Pelanggan $customer;
+
     private Supplier $supplier;
+
     private Persediaan $product;
 
     protected function setUp(): void
@@ -62,6 +66,7 @@ class TransactionFlowTest extends TestCase
             $table->string('kategori_barang', 50)->nullable();
             $table->string('satuan', 20)->default('unit');
             $table->decimal('stok', 15, 3)->default(0);
+            $table->decimal('stok_minimum', 15, 3)->default(0);
             $table->decimal('harga_jual', 15, 2)->nullable();
         });
 
@@ -88,6 +93,9 @@ class TransactionFlowTest extends TestCase
             $table->string('id_pegawai', 10);
             $table->date('tanggal');
             $table->string('status_pengiriman', 30)->default('Diproses');
+            $table->string('metode_pembayaran', 20)->default('Tunai');
+            $table->date('tanggal_jatuh_tempo')->nullable();
+            $table->date('tanggal_pembayaran')->nullable();
         });
 
         Schema::create('detail_pembelian', function (Blueprint $table): void {
@@ -125,6 +133,54 @@ class TransactionFlowTest extends TestCase
         ]);
     }
 
+    public function test_supplier_payment_migration_defaults_legacy_purchases_to_cash(): void
+    {
+        Schema::dropIfExists('pembelian');
+        Schema::create('pembelian', function (Blueprint $table): void {
+            $table->string('id_pembelian', 10)->primary();
+            $table->string('id_supplier', 10);
+            $table->string('id_pegawai', 10);
+            $table->date('tanggal');
+            $table->string('status_pengiriman', 30)->default('Diproses');
+        });
+        DB::table('pembelian')->insert([
+            'id_pembelian' => 'PB000099',
+            'id_supplier' => 'SUP0001',
+            'id_pegawai' => 'PGW0001',
+            'tanggal' => today()->toDateString(),
+            'status_pengiriman' => 'Diterima',
+        ]);
+
+        $migration = require database_path('migrations/2026_11_26_000001_add_supplier_payment_fields_to_pembelian.php');
+        $migration->up();
+
+        $this->assertTrue(Schema::hasColumn('pembelian', 'metode_pembayaran'));
+        $this->assertTrue(Schema::hasColumn('pembelian', 'tanggal_jatuh_tempo'));
+        $this->assertTrue(Schema::hasColumn('pembelian', 'tanggal_pembayaran'));
+        $this->assertDatabaseHas('pembelian', [
+            'id_pembelian' => 'PB000099',
+            'metode_pembayaran' => 'Tunai',
+            'tanggal_jatuh_tempo' => null,
+            'tanggal_pembayaran' => null,
+        ]);
+    }
+
+    public function test_minimum_stock_migration_defaults_existing_inventory_to_zero(): void
+    {
+        Schema::table('persediaan', function (Blueprint $table): void {
+            $table->dropColumn('stok_minimum');
+        });
+
+        $migration = require database_path('migrations/2026_11_27_000001_add_minimum_stock_to_persediaan.php');
+        $migration->up();
+
+        $this->assertTrue(Schema::hasColumn('persediaan', 'stok_minimum'));
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok_minimum' => 0,
+        ]);
+    }
+
     public function test_sale_reduces_stock_and_persists_line_items(): void
     {
         $response = $this->actingAs($this->employee, 'employee')
@@ -154,12 +210,282 @@ class TransactionFlowTest extends TestCase
             ->assertSee('2 sak');
     }
 
-    public function test_purchase_form_does_not_show_delivery_status_field(): void
+    public function test_purchase_form_does_not_show_supplier_payment_fields_or_delivery_status_field(): void
     {
         $this->actingAs($this->employee, 'employee')
             ->get(route('employee.pembelian.create'))
             ->assertOk()
+            ->assertDontSee('Metode bayar')
+            ->assertDontSee('Jatuh tempo')
+            ->assertDontSee('Perbandingan harga beli terakhir')
             ->assertDontSee('Status pengiriman');
+    }
+
+    public function test_purchase_form_recommends_items_using_minimum_stock_and_recent_sales(): void
+    {
+        $this->product->update([
+            'stok' => 5,
+            'stok_minimum' => 10,
+        ]);
+        Persediaan::query()->create([
+            'id_persediaan' => 'BRG0002',
+            'id_pegawai' => $this->employee->id_pegawai,
+            'nama_barang' => 'Pasir',
+            'satuan' => 'kg',
+            'stok' => 10,
+            'stok_minimum' => 10,
+            'harga_jual' => 10000,
+        ]);
+        Persediaan::query()->create([
+            'id_persediaan' => 'BRG0003',
+            'id_pegawai' => $this->employee->id_pegawai,
+            'nama_barang' => 'Paku',
+            'satuan' => 'kg',
+            'stok' => 2,
+            'stok_minimum' => 8,
+            'harga_jual' => 5000,
+        ]);
+        Penjualan::query()->create([
+            'id_penjualan' => 'PJ000001',
+            'id_pelanggan' => $this->customer->id_pelanggan,
+            'id_pegawai' => $this->employee->id_pegawai,
+            'tanggal' => today()->subDays(29)->toDateString(),
+        ]);
+        DetailPenjualan::query()->create([
+            'id_penjualan' => 'PJ000001',
+            'id_persediaan' => $this->product->id_persediaan,
+            'satuan' => $this->product->satuan,
+            'harga_satuan' => 75000,
+            'jumlah_barang' => 4,
+        ]);
+        Penjualan::query()->create([
+            'id_penjualan' => 'PJ000002',
+            'id_pelanggan' => $this->customer->id_pelanggan,
+            'id_pegawai' => $this->employee->id_pegawai,
+            'tanggal' => today()->subDays(10)->toDateString(),
+        ]);
+        DetailPenjualan::query()->create([
+            'id_penjualan' => 'PJ000002',
+            'id_persediaan' => $this->product->id_persediaan,
+            'satuan' => $this->product->satuan,
+            'harga_satuan' => 75000,
+            'jumlah_barang' => 10,
+        ]);
+        Penjualan::query()->create([
+            'id_penjualan' => 'PJ000003',
+            'id_pelanggan' => $this->customer->id_pelanggan,
+            'id_pegawai' => $this->employee->id_pegawai,
+            'tanggal' => today()->subDays(30)->toDateString(),
+        ]);
+        DetailPenjualan::query()->create([
+            'id_penjualan' => 'PJ000003',
+            'id_persediaan' => $this->product->id_persediaan,
+            'satuan' => $this->product->satuan,
+            'harga_satuan' => 75000,
+            'jumlah_barang' => 100,
+        ]);
+
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pembelian.create'))
+            ->assertOk()
+            ->assertSee('Rekomendasi restock')
+            ->assertSee('Ada 2 barang')
+            ->assertSee('data-product-id="BRG0001"', false)
+            ->assertDontSee('data-product-id="BRG0002"', false)
+            ->assertSee('data-sold-in-thirty-days="14.000"', false)
+            ->assertSee('value="9.000"', false)
+            ->assertSee('data-product-id="BRG0003"', false)
+            ->assertSee('value="6.000"', false)
+            ->assertSee('Terjual 30 hari')
+            ->assertSee('14', false);
+    }
+
+    public function test_purchase_index_shows_color_coded_delivery_status_badges(): void
+    {
+        foreach ([
+            ['PB000001', 'Diproses'],
+            ['PB000002', 'Diterima'],
+            ['PB000003', 'Dibatalkan'],
+        ] as [$id, $status]) {
+            Pembelian::query()->create([
+                'id_pembelian' => $id,
+                'id_supplier' => $this->supplier->id_supplier,
+                'id_pegawai' => $this->employee->id_pegawai,
+                'tanggal' => today()->toDateString(),
+                'status_pengiriman' => $status,
+            ]);
+        }
+
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pembelian.index'))
+            ->assertOk()
+            ->assertSee('css/purchase.css')
+            ->assertSee('purchase-action-cell')
+            ->assertSee('purchase-status-pending')
+            ->assertSee('purchase-status-received')
+            ->assertSee('purchase-status-cancelled')
+            ->assertSee('Menunggu')
+            ->assertSee('Diterima')
+            ->assertSee('Dibatalkan')
+            ->assertDontSee('Total hutang')
+            ->assertDontSee('Tandai lunas');
+    }
+
+    public function test_purchase_index_filters_results_and_keeps_filters_in_pagination(): void
+    {
+        for ($number = 1; $number <= 11; $number++) {
+            Pembelian::query()->create([
+                'id_pembelian' => sprintf('PB%06d', $number),
+                'id_supplier' => $this->supplier->id_supplier,
+                'id_pegawai' => $this->employee->id_pegawai,
+                'tanggal' => today()->toDateString(),
+                'status_pengiriman' => 'Diproses',
+            ]);
+        }
+
+        Pembelian::query()->create([
+            'id_pembelian' => 'PB000099',
+            'id_supplier' => $this->supplier->id_supplier,
+            'id_pegawai' => $this->employee->id_pegawai,
+            'tanggal' => today()->toDateString(),
+            'status_pengiriman' => 'Diterima',
+        ]);
+        Pembelian::query()->create([
+            'id_pembelian' => 'PB000100',
+            'id_supplier' => $this->supplier->id_supplier,
+            'id_pegawai' => $this->employee->id_pegawai,
+            'tanggal' => today()->subDay()->toDateString(),
+            'status_pengiriman' => 'Diproses',
+        ]);
+
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pembelian.index', [
+                'search' => 'PB',
+                'from' => today()->toDateString(),
+                'to' => today()->toDateString(),
+                'status' => 'Diproses',
+                'supplier' => $this->supplier->id_supplier,
+            ]))
+            ->assertOk()
+            ->assertSee('data-purchase-filter-form', false)
+            ->assertSee('requestSubmit()', false)
+            ->assertSee('Menampilkan 1-10')
+            ->assertSee('dari 11 pembelian')
+            ->assertSee('Status: Menunggu')
+            ->assertSee('Supplier: Supplier Uji')
+            ->assertSee('search=PB')
+            ->assertSee('page=2')
+            ->assertDontSee('PB000099')
+            ->assertDontSee('PB000100');
+
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pembelian.index', ['search' => 'Supplier Uji']))
+            ->assertOk()
+            ->assertSee('PB000011')
+            ->assertSee('Pencarian: Supplier Uji');
+    }
+
+    public function test_purchase_order_preview_has_pdf_and_excel_actions(): void
+    {
+        $purchase = Pembelian::query()->create([
+            'id_pembelian' => 'PB000101',
+            'id_supplier' => $this->supplier->id_supplier,
+            'id_pegawai' => $this->employee->id_pegawai,
+            'tanggal' => today()->toDateString(),
+            'status_pengiriman' => 'Diproses',
+        ]);
+        $purchase->detailPembelian()->create([
+            'id_persediaan' => $this->product->id_persediaan,
+            'satuan' => 'sak',
+            'harga_beli' => 62000,
+            'jumlah_barang' => 100,
+        ]);
+
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pembelian.purchase-order', $purchase))
+            ->assertOk()
+            ->assertSee('Purchase order')
+            ->assertSee('PB000101')
+            ->assertSee('Semen')
+            ->assertSee('Rp 6.200.000')
+            ->assertSee('Unduh PO (PDF)')
+            ->assertSee('Ekspor daftar (Excel)')
+            ->assertDontSee('Kirim ke supplier')
+            ->assertDontSee('wa.me');
+    }
+
+    public function test_purchase_order_can_be_downloaded_as_pdf(): void
+    {
+        $purchase = Pembelian::query()->create([
+            'id_pembelian' => 'PB000102',
+            'id_supplier' => $this->supplier->id_supplier,
+            'id_pegawai' => $this->employee->id_pegawai,
+            'tanggal' => today()->toDateString(),
+            'status_pengiriman' => 'Diproses',
+        ]);
+        $purchase->detailPembelian()->create([
+            'id_persediaan' => $this->product->id_persediaan,
+            'satuan' => 'sak',
+            'harga_beli' => 62000,
+            'jumlah_barang' => 2,
+        ]);
+
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pembelian.purchase-order.download', $purchase))
+            ->assertOk()
+            ->assertDownload('PO-PB000102.pdf');
+    }
+
+    public function test_purchase_export_includes_all_matching_rows_and_respects_filters(): void
+    {
+        $this->supplier->update(['nama_supplier' => '=HYPERLINK("https://example.test","Supplier")']);
+
+        for ($number = 1; $number <= 11; $number++) {
+            Pembelian::query()->create([
+                'id_pembelian' => sprintf('PB%06d', $number),
+                'id_supplier' => $this->supplier->id_supplier,
+                'id_pegawai' => $this->employee->id_pegawai,
+                'tanggal' => today()->toDateString(),
+                'status_pengiriman' => 'Diproses',
+            ]);
+        }
+        Pembelian::query()->create([
+            'id_pembelian' => 'PB000099',
+            'id_supplier' => $this->supplier->id_supplier,
+            'id_pegawai' => $this->employee->id_pegawai,
+            'tanggal' => today()->toDateString(),
+            'status_pengiriman' => 'Diterima',
+        ]);
+
+        $response = $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pembelian.export', ['status' => 'Diproses']));
+
+        $response->assertOk()
+            ->assertDownload('daftar-pembelian-'.today()->format('Ymd').'.xlsx')
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $contents = $response->streamedContent();
+
+        $this->assertStringStartsWith('PK', $contents);
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'purchase-test-');
+        $this->assertNotFalse($temporaryPath);
+
+        try {
+            file_put_contents($temporaryPath, $contents);
+            $archive = new \ZipArchive;
+            $this->assertSame(true, $archive->open($temporaryPath));
+            $sheet = $archive->getFromName('xl/worksheets/sheet1.xml');
+            $archive->close();
+
+            $this->assertIsString($sheet);
+            $this->assertStringContainsString('PB000011', $sheet);
+            $this->assertStringNotContainsString('PB000099', $sheet);
+            $this->assertStringContainsString('=HYPERLINK', $sheet);
+            $this->assertStringNotContainsString('<f', $sheet);
+        } finally {
+            if (is_string($temporaryPath) && is_file($temporaryPath)) {
+                unlink($temporaryPath);
+            }
+        }
     }
 
     public function test_purchase_actions_support_edit_delete_and_receive_without_detail_action(): void
@@ -184,6 +510,9 @@ class TransactionFlowTest extends TestCase
             ->assertSee('Ubah')
             ->assertSee('Hapus')
             ->assertSee('Terima')
+            ->assertSee('Dipesan')
+            ->assertSee('Datang')
+            ->assertSee('Sisa')
             ->assertSee('Detail pembelian')
             ->assertDontSee('>Detail<');
 
@@ -219,6 +548,132 @@ class TransactionFlowTest extends TestCase
         $this->assertDatabaseMissing('pembelian', [
             'id_pembelian' => $purchase->id_pembelian,
         ]);
+    }
+
+    public function test_purchase_can_receive_multiple_partial_deliveries_until_complete(): void
+    {
+        $purchase = Pembelian::query()->create([
+            'id_pembelian' => 'PB000021',
+            'id_supplier' => $this->supplier->id_supplier,
+            'id_pegawai' => $this->employee->id_pegawai,
+            'tanggal' => today()->toDateString(),
+            'status_pengiriman' => 'Diproses',
+        ]);
+        $detail = $purchase->detailPembelian()->create([
+            'id_persediaan' => $this->product->id_persediaan,
+            'satuan' => 'sak',
+            'harga_beli' => 60000,
+            'jumlah_barang' => 10,
+        ]);
+
+        $this->actingAs($this->employee, 'employee')
+            ->patch(route('employee.pembelian.receive', $purchase), [
+                'items' => [$detail->id_detail => ['jumlah_datang' => 4]],
+                'catatan' => '4 sak datang, sisanya menyusul Senin',
+            ])
+            ->assertRedirect(route('employee.pembelian.index'));
+
+        $this->assertDatabaseHas('pembelian', [
+            'id_pembelian' => $purchase->id_pembelian,
+            'status_pengiriman' => 'Diproses',
+        ]);
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 9,
+        ]);
+        $this->assertDatabaseHas('penerimaan_pembelian', [
+            'id_pembelian' => $purchase->id_pembelian,
+            'catatan' => '4 sak datang, sisanya menyusul Senin',
+        ]);
+        $this->assertDatabaseHas('detail_penerimaan_pembelian', [
+            'id_detail_pembelian' => $detail->id_detail,
+            'jumlah_datang' => 4,
+        ]);
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pembelian.edit', $purchase))
+            ->assertNotFound();
+
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pembelian.index'))
+            ->assertOk()
+            ->assertSee('Backorder')
+            ->assertSee('4 sak datang, sisanya menyusul Senin');
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.persediaan.stock-card', $this->product))
+            ->assertOk()
+            ->assertSee($purchase->id_pembelian)
+            ->assertSee('4 sak');
+
+        $this->actingAs($this->employee, 'employee')
+            ->patch(route('employee.pembelian.receive', $purchase), [
+                'items' => [$detail->id_detail => ['jumlah_datang' => 6]],
+                'catatan' => 'Sisa 6 sak diterima',
+            ])
+            ->assertRedirect(route('employee.pembelian.index'));
+
+        $this->assertDatabaseHas('pembelian', [
+            'id_pembelian' => $purchase->id_pembelian,
+            'status_pengiriman' => 'Diterima',
+        ]);
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 15,
+        ]);
+        $this->assertDatabaseCount('penerimaan_pembelian', 2);
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.persediaan.stock-card', $this->product))
+            ->assertOk()
+            ->assertSee('4 sak')
+            ->assertSee('6 sak');
+    }
+
+    public function test_partial_receipt_rejects_overdelivery_and_delete_reverses_only_arrived_stock(): void
+    {
+        $purchase = Pembelian::query()->create([
+            'id_pembelian' => 'PB000022',
+            'id_supplier' => $this->supplier->id_supplier,
+            'id_pegawai' => $this->employee->id_pegawai,
+            'tanggal' => today()->toDateString(),
+            'status_pengiriman' => 'Diproses',
+        ]);
+        $detail = $purchase->detailPembelian()->create([
+            'id_persediaan' => $this->product->id_persediaan,
+            'satuan' => 'sak',
+            'harga_beli' => 60000,
+            'jumlah_barang' => 5,
+        ]);
+
+        $this->actingAs($this->employee, 'employee')
+            ->patch(route('employee.pembelian.receive', $purchase), [
+                'items' => [$detail->id_detail => ['jumlah_datang' => 6]],
+            ])
+            ->assertSessionHasErrors("items.{$detail->id_detail}.jumlah_datang");
+        $this->assertDatabaseCount('penerimaan_pembelian', 0);
+        $this->actingAs($this->employee, 'employee')
+            ->get(route('employee.pembelian.index'))
+            ->assertOk()
+            ->assertSee('data-open-after-validation', false)
+            ->assertSee('value="6"', false);
+
+        $this->actingAs($this->employee, 'employee')
+            ->patch(route('employee.pembelian.receive', $purchase), [
+                'items' => [$detail->id_detail => ['jumlah_datang' => 2]],
+            ])
+            ->assertRedirect(route('employee.pembelian.index'));
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 7,
+        ]);
+
+        $this->actingAs($this->employee, 'employee')
+            ->delete(route('employee.pembelian.destroy', $purchase))
+            ->assertRedirect(route('employee.pembelian.index'));
+        $this->assertDatabaseHas('persediaan', [
+            'id_persediaan' => $this->product->id_persediaan,
+            'stok' => 5,
+        ]);
+        $this->assertDatabaseCount('penerimaan_pembelian', 0);
+        $this->assertDatabaseCount('detail_penerimaan_pembelian', 0);
     }
 
     public function test_sale_accepts_fractional_quantities_in_inventory_unit(): void
@@ -841,6 +1296,7 @@ class TransactionFlowTest extends TestCase
                 'satuan' => 'kg',
                 'harga_jual' => 75000,
                 'stok' => 5,
+                'stok_minimum' => 0,
             ])
             ->assertSessionHasErrors('satuan');
 

@@ -85,6 +85,13 @@ Route::middleware('auth:employee')->prefix('employee')->name('employee.')->group
     Route::post('/pembelian/ocr/confirm', [PembelianController::class, 'storeFromOcr'])
         ->name('pembelian.ocr.store');
     Route::post('/pembelian', [PembelianController::class, 'store'])->name('pembelian.store');
+    Route::get('/pembelian/export', [PembelianController::class, 'export'])->name('pembelian.export');
+    Route::get('/pembelian/{pembelian}/po/pdf', [PembelianController::class, 'downloadPurchaseOrder'])
+        ->name('pembelian.purchase-order.download');
+    Route::get('/pembelian/{pembelian}/po', [PembelianController::class, 'purchaseOrder'])
+        ->name('pembelian.purchase-order');
+    Route::patch('/pembelian/{pembelian}/terima', [PembelianController::class, 'receive'])
+        ->name('pembelian.receive');
     Route::get('/pembelian/detail', [PembelianController::class, 'details'])->name('pembelian.details');
     Route::get('/pembelian/{pembelian}/nota', [ReceiptOcrController::class, 'download'])
         ->name('pembelian.receipt.download');

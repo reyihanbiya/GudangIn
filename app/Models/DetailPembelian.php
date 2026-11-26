@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DetailPembelian extends Model
 {
@@ -26,5 +27,10 @@ class DetailPembelian extends Model
     public function persediaan(): BelongsTo
     {
         return $this->belongsTo(Persediaan::class, 'id_persediaan', 'id_persediaan');
+    }
+
+    public function penerimaanLines(): HasMany
+    {
+        return $this->hasMany(DetailPenerimaanPembelian::class, 'id_detail_pembelian', 'id_detail');
     }
 }

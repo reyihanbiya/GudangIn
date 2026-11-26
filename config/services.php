@@ -39,6 +39,11 @@ return [
         'languages' => env('TESSERACT_LANGUAGES', 'eng+ind'),
         'timeout' => env('TESSERACT_TIMEOUT', 60),
     ],
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-3.5-flash-lite'),
+        'timeout' => env('GEMINI_TIMEOUT', 60),
+    ],
     'xendit' => [
         'simulation' => env('XENDIT_SIMULATION', true),
         'secret_key' => env('XENDIT_SECRET_KEY'),

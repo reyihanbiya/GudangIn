@@ -78,6 +78,7 @@ class MasterDataTest extends TestCase
             $table->string('kategori_barang', 50)->nullable();
             $table->string('satuan', 20)->default('unit');
             $table->decimal('stok', 15, 3)->default(0);
+            $table->decimal('stok_minimum', 15, 3)->default(0);
             $table->decimal('harga_jual', 15, 2)->nullable();
         });
 
@@ -95,6 +96,7 @@ class MasterDataTest extends TestCase
                 'kategori_barang' => 'Material',
                 'satuan' => 'kg',
                 'stok' => '12.750',
+                'stok_minimum' => '20.5',
                 'harga_jual' => '13500',
             ])
             ->assertRedirect(route('employee.persediaan.index'));
@@ -104,6 +106,7 @@ class MasterDataTest extends TestCase
             'nama_barang' => 'Pasir',
             'satuan' => 'kg',
             'stok' => '12.750',
+            'stok_minimum' => '20.500',
             'harga_jual' => '13500.00',
         ]);
 
@@ -113,6 +116,7 @@ class MasterDataTest extends TestCase
             ->assertSee('data-custom-select', false)
             ->assertSee('Kilogram (kg)')
             ->assertSee('Harga jual')
+            ->assertSee('Stok minimum')
             ->assertSee('Lainnya');
 
         $this->actingAs($employee, 'employee')
@@ -135,6 +139,7 @@ class MasterDataTest extends TestCase
                 'satuan' => '__custom__',
                 'satuan_custom' => 'ikat',
                 'stok' => '1',
+                'stok_minimum' => '0',
                 'harga_jual' => '2500',
             ])
             ->assertRedirect(route('employee.persediaan.index'));

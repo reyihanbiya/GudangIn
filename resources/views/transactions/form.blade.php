@@ -67,6 +67,71 @@
                 </div>
             </div>
 
+            @if ($type === 'Pembelian')
+                @if (($restockRecommendations ?? collect())->isNotEmpty())
+                    <section class="purchase-restock-panel" data-restock-panel aria-labelledby="restock-heading">
+                        <div class="purchase-restock-heading">
+                            <div>
+                                <h2 id="restock-heading">Rekomendasi restock</h2>
+                                <p>Ada {{ $restockRecommendations->count() }} barang dengan stok di bawah minimum. Saran mempertimbangkan penjualan 30 hari terakhir.</p>
+                            </div>
+                            <button class="button button-secondary" type="button" data-fill-restock>Isi dari stok menipis</button>
+                        </div>
+                        <div class="purchase-restock-table-wrap">
+                            <table class="purchase-restock-table">
+                                <thead>
+                                    <tr>
+                                        <th>Barang</th>
+                                        <th>Stok / min</th>
+                                        <th>Terjual 30 hari</th>
+                                        <th>Jumlah saran</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($restockRecommendations as $recommendation)
+                                        @php
+                                            $recommendedProduct = $recommendation['product'];
+                                            $quantityLabel = 'Jumlah saran untuk '.$recommendedProduct->nama_barang;
+                                        @endphp
+                                        <tr
+                                            data-restock-item
+                                            data-product-id="{{ $recommendedProduct->id_persediaan }}"
+                                            data-sold-in-thirty-days="{{ number_format($recommendation['sold_in_thirty_days'], 3, '.', '') }}"
+                                        >
+                                            <td>{{ $recommendedProduct->nama_barang }}</td>
+                                            <td>
+                                                {{ \App\Support\QuantityFormatter::format($recommendedProduct->stok) }}
+                                                /
+                                                {{ \App\Support\QuantityFormatter::format($recommendedProduct->stok_minimum) }}
+                                                {{ $recommendedProduct->satuan }}
+                                            </td>
+                                            <td>
+                                                {{ \App\Support\QuantityFormatter::format($recommendation['sold_in_thirty_days']) }}
+                                                {{ $recommendedProduct->satuan }}
+                                            </td>
+                                            <td>
+                                                <div class="purchase-restock-quantity">
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.001"
+                                                        value="{{ number_format($recommendation['suggested_quantity'], 3, '.', '') }}"
+                                                        data-restock-quantity
+                                                        aria-label="{{ $quantityLabel }}"
+                                                    >
+                                                    <span>{{ $recommendedProduct->satuan }}</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                @endif
+
+            @endif
+
             <div class="line-heading">
                 <div>
                     <h2>Rincian barang</h2>
@@ -178,11 +243,15 @@
                 }
             };
 
-            list.querySelectorAll('[data-transaction-line]').forEach(updateQuantityUnit);
+            list.querySelectorAll('[data-transaction-line]').forEach((row) => {
+                updateQuantityUnit(row);
+            });
 
             list.addEventListener('change', (event) => {
                 const row = event.target.closest('[data-transaction-line]');
-                if (row && event.target.matches('select')) updateQuantityUnit(row);
+                if (row && event.target.matches('select')) {
+                    updateQuantityUnit(row);
+                }
             });
 
             addButton.addEventListener('click', () => {
@@ -211,6 +280,38 @@
                 } else {
                     row.remove();
                 }
+            });
+
+            const restockPanel = document.querySelector('[data-restock-panel]');
+            const fillRestockButton = restockPanel?.querySelector('[data-fill-restock]');
+            fillRestockButton?.addEventListener('click', () => {
+                restockPanel.querySelectorAll('[data-restock-item]').forEach((recommendation) => {
+                    const productId = recommendation.dataset.productId;
+                    const quantity = recommendation.querySelector('[data-restock-quantity]').value;
+                    const rows = [...list.querySelectorAll('[data-transaction-line]')];
+                    let row = rows.find((line) => line.querySelector('select').value === productId);
+
+                    if (row) {
+                        const quantityInput = row.querySelector('input[name$="[jumlah_barang]"]');
+                        if (quantityInput.value === '') quantityInput.value = quantity;
+                        return;
+                    }
+
+                    row = rows.find((line) => (
+                        line.querySelector('select').value === ''
+                        && line.querySelector('input[name$="[jumlah_barang]"]').value === ''
+                    ));
+
+                    if (!row) {
+                        addButton.click();
+                        row = list.lastElementChild;
+                    }
+
+                    const productSelect = row.querySelector('select');
+                    productSelect.value = productId;
+                    productSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    row.querySelector('input[name$="[jumlah_barang]"]').value = quantity;
+                });
             });
         });
     </script>

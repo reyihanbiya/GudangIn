@@ -22,6 +22,7 @@ class Persediaan extends Model
         'kategori_barang',
         'satuan',
         'stok',
+        'stok_minimum',
         'harga_jual',
     ];
 

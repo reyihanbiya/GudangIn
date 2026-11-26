@@ -140,10 +140,24 @@ class PersediaanController extends Controller
 
     public function stockCard(Persediaan $persediaan): View
     {
-        $purchases = DB::table('detail_pembelian as detail')
+        $purchaseReceipts = DB::table('detail_penerimaan_pembelian as receipt_detail')
+            ->join('penerimaan_pembelian as receipt', 'receipt.id_penerimaan', '=', 'receipt_detail.id_penerimaan')
+            ->join('detail_pembelian as detail', 'detail.id_detail', '=', 'receipt_detail.id_detail_pembelian')
+            ->join('pembelian as purchase', 'purchase.id_pembelian', '=', 'receipt.id_pembelian')
+            ->where('detail.id_persediaan', $persediaan->id_persediaan)
+            ->selectRaw(
+                "DATE(receipt.created_at) as tanggal, 'Pembelian' as keterangan, purchase.id_pembelian as id_transaksi, receipt_detail.jumlah_datang as masuk, 0 as keluar, detail.satuan as satuan"
+            );
+
+        $legacyPurchases = DB::table('detail_pembelian as detail')
             ->join('pembelian as purchase', 'purchase.id_pembelian', '=', 'detail.id_pembelian')
             ->where('detail.id_persediaan', $persediaan->id_persediaan)
             ->where('purchase.status_pengiriman', 'Diterima')
+            ->whereNotExists(function ($query): void {
+                $query->selectRaw('1')
+                    ->from('penerimaan_pembelian as receipt')
+                    ->whereColumn('receipt.id_pembelian', 'purchase.id_pembelian');
+            })
             ->selectRaw(
                 "purchase.tanggal as tanggal, 'Pembelian' as keterangan, purchase.id_pembelian as id_transaksi, detail.jumlah_barang as masuk, 0 as keluar, detail.satuan as satuan"
             );
@@ -155,7 +169,7 @@ class PersediaanController extends Controller
                 "sale.tanggal as tanggal, 'Penjualan' as keterangan, sale.id_penjualan as id_transaksi, 0 as masuk, detail.jumlah_barang as keluar, detail.satuan as satuan"
             );
 
-        $movements = $purchases->unionAll($sales)
+        $movements = $purchaseReceipts->unionAll($legacyPurchases)->unionAll($sales)
             ->orderBy('tanggal')
             ->orderBy('id_transaksi')
             ->paginate(20);
@@ -181,8 +195,18 @@ class PersediaanController extends Controller
                 ],
                 ['name' => 'harga_jual', 'label' => 'Harga jual', 'type' => 'number', 'required' => true, 'min' => 0.01, 'max' => 9999999999999.99, 'step' => '0.01'],
                 ['name' => 'stok', 'label' => 'Stok awal', 'type' => 'number', 'required' => true, 'min' => 0, 'step' => '0.001'],
+                [
+                    'name' => 'stok_minimum',
+                    'label' => 'Stok minimum',
+                    'type' => 'number',
+                    'required' => true,
+                    'min' => 0,
+                    'max' => 999999999999.999,
+                    'step' => '0.001',
+                    'help' => 'Barang dengan stok di bawah nilai ini akan muncul sebagai rekomendasi restock.',
+                ],
             ],
-            'values' => $persediaan?->only(['nama_barang', 'kategori_barang', 'satuan', 'harga_jual', 'stok']) ?? ['satuan' => 'pcs', 'harga_jual' => '', 'stok' => 0],
+            'values' => $persediaan?->only(['nama_barang', 'kategori_barang', 'satuan', 'harga_jual', 'stok', 'stok_minimum']) ?? ['satuan' => 'pcs', 'harga_jual' => '', 'stok' => 0, 'stok_minimum' => 0],
             'formAction' => $persediaan
                 ? route('employee.persediaan.update', $persediaan)
                 : route('employee.persediaan.store'),
@@ -201,6 +225,7 @@ class PersediaanController extends Controller
             'satuan_custom' => ['nullable', 'required_if:satuan,'.self::CUSTOM_UNIT, 'string', 'max:20'],
             'harga_jual' => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:9999999999999.99'],
             'stok' => ['required', 'numeric', 'decimal:0,3', 'min:0', 'max:999999999999.999'],
+            'stok_minimum' => ['required', 'numeric', 'decimal:0,3', 'min:0', 'max:999999999999.999'],
         ]);
 
         if ($data['satuan'] === self::CUSTOM_UNIT) {

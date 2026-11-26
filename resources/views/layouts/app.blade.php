@@ -11,6 +11,9 @@
     @if (request()->routeIs('employee.penjualan.index'))
         <link rel="stylesheet" href="{{ asset('css/cashier.css') }}">
     @endif
+    @if (request()->routeIs('employee.pembelian.*'))
+        <link rel="stylesheet" href="{{ asset('css/purchase.css') }}">
+    @endif
 </head>
 @php
     $isEmployee = auth()->guard('employee')->check();

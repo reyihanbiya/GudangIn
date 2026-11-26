@@ -8,6 +8,7 @@ use App\Models\Supplier;
 use App\Services\ReceiptOcrException;
 use App\Services\ReceiptOcrParser;
 use App\Services\ReceiptOcrService;
+use App\Services\RestockRecommendationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -99,8 +100,12 @@ class ReceiptOcrController extends Controller
         ], 201);
     }
 
-    public function review(Request $request, string $token, ReceiptOcrParser $parser): View
-    {
+    public function review(
+        Request $request,
+        string $token,
+        ReceiptOcrParser $parser,
+        RestockRecommendationService $restockRecommendations
+    ): View {
         $draft = $request->session()->get('receipt_drafts.'.$token);
 
         abort_unless(
@@ -123,6 +128,7 @@ class ReceiptOcrController extends Controller
             'action' => route('employee.pembelian.ocr.store'),
             'counterparts' => $suppliers,
             'products' => $products,
+            'restockRecommendations' => $restockRecommendations->forPurchaseForm(),
             'date' => today()->toDateString(),
             'ocrText' => $draft['hasil_ocr'],
             'receiptToken' => $token,

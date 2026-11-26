@@ -15,7 +15,7 @@
             <div class="notice notice-error">{{ $errors->first() }}</div>
         @endif
         <div class="notice notice-info">
-            OCR dijalankan secara lokal menggunakan Tesseract. Gambar nota tidak dikirim ke layanan pihak ketiga.
+            OCR menggunakan Gemini API, dengan Tesseract sebagai cadangan bila Gemini tidak tersedia.
         </div>
         <form method="POST" action="{{ route('employee.pembelian.ocr.process') }}" enctype="multipart/form-data" class="stack-form">
             @csrf

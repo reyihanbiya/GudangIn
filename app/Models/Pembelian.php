@@ -38,6 +38,12 @@ class Pembelian extends Model
         return $this->hasMany(DetailPembelian::class, 'id_pembelian', 'id_pembelian');
     }
 
+    public function penerimaanPembelian(): HasMany
+    {
+        return $this->hasMany(PenerimaanPembelian::class, 'id_pembelian', 'id_pembelian')
+            ->orderBy('created_at');
+    }
+
     public function notaPembelian(): HasOne
     {
         return $this->hasOne(NotaPembelian::class, 'id_pembelian', 'id_pembelian');
